@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/aanerud-mcp-microsoft-office-badge.png)](https://mseep.ai/app/aanerud-mcp-microsoft-office)
+
 # MCP Microsoft Office Bridge 
 
 **A production-ready bridge connecting LLMs to Microsoft 365 via the Model Context Protocol (MCP)**
