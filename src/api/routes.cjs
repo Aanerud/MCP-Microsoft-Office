@@ -482,7 +482,10 @@ function registerRoutes(router) {
     mcpRouter.get('/info', mcpTransportController.getInfo);
 
     // SSE endpoint - requires authentication (via Bearer token, query param, or session)
+    // GET: SSE connection for streaming
+    // POST: Streamable HTTP transport (mcp-remote uses this first)
     mcpRouter.get('/sse', requireAuth, mcpTransportController.sseConnect);
+    mcpRouter.post('/sse', requireAuth, mcpTransportController.handleMessage);
 
     // Message endpoint - requires authentication
     mcpRouter.post('/message', requireAuth, mcpTransportController.handleMessage);
