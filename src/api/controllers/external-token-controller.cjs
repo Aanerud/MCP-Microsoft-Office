@@ -101,10 +101,11 @@ async function inject(req, res) {
       timestamp: new Date().toISOString()
     }, 'auth');
 
-    // Validate the token
+    // Validate the token (skip Graph API test to avoid rate limiting)
+    // JWT claims are sufficient for validation - Microsoft signs these tokens
     let validationResult;
     try {
-      validationResult = await ExternalTokenValidator.validateExternalToken(access_token);
+      validationResult = await ExternalTokenValidator.validateExternalToken(access_token, { skipGraphTest: true });
     } catch (validationError) {
       MonitoringService.warn('External token validation failed', {
         userId,
@@ -378,10 +379,11 @@ async function loginWithToken(req, res) {
       timestamp: new Date().toISOString()
     }, 'auth');
 
-    // Validate the token
+    // Validate the token (skip Graph API test to avoid rate limiting)
+    // JWT claims are sufficient for validation - Microsoft signs these tokens
     let validationResult;
     try {
-      validationResult = await ExternalTokenValidator.validateExternalToken(access_token);
+      validationResult = await ExternalTokenValidator.validateExternalToken(access_token, { skipGraphTest: true });
     } catch (validationError) {
       MonitoringService.warn('External token login validation failed', {
         errorCode: validationError.code,

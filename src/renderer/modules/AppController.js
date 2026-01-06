@@ -794,15 +794,15 @@ export class AppController {
             clearInterval(this.logRefreshInterval);
         }
         
-        // Set up auto-refresh interval
+        // Set up auto-refresh interval (60 seconds to reduce API calls)
         this.logRefreshInterval = setInterval(() => {
             // Get the currently selected scope from the UI
             const scopeSelector = document.querySelector('input[name="log-scope"]:checked');
             const currentScope = scopeSelector ? scopeSelector.value : 'user';
-            
+
             // Fetch logs with the current scope, preserving existing logs
             this.fetchRecentLogs(false, currentScope, true); // Don't clear existing logs during auto-refresh
-        }, 10000); // Refresh every 10 seconds
+        }, 60000); // Refresh every 60 seconds to reduce API load
         
         // Update UI to show auto-refresh is on
         const autoRefreshToggle = document.getElementById('auto-refresh-toggle');
@@ -812,7 +812,7 @@ export class AppController {
         
         // Log the auto-refresh start
         window.MonitoringService && window.MonitoringService.info('Started log auto-refresh', {
-            interval: '10s',
+            interval: '60s',
             operation: 'auto-refresh-start'
         }, 'renderer');
     }
