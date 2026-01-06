@@ -10,6 +10,15 @@ const storageService = require('../core/storage-service.cjs');
 const MonitoringService = require('../core/monitoring-service.cjs');
 const ErrorService = require('../core/error-service.cjs');
 
+// External token support - lazy loaded to avoid circular dependency
+let externalTokenController = null;
+function getExternalTokenController() {
+    if (!externalTokenController) {
+        externalTokenController = require('../api/controllers/external-token-controller.cjs');
+    }
+    return externalTokenController;
+}
+
 // Load environment variables
 const CLIENT_ID = process.env.MICROSOFT_CLIENT_ID;
 const TENANT_ID = process.env.MICROSOFT_TENANT_ID || 'common';
@@ -854,7 +863,39 @@ async function getAccessToken(req) {
             
             throw new Error('No user ID available for token retrieval');
         }
-        
+
+        // Check for external token first (enterprise tokens from external tools)
+        try {
+            const extController = getExternalTokenController();
+            const externalToken = await extController.getActiveExternalToken(userId);
+            if (externalToken) {
+                if (process.env.NODE_ENV === 'development') {
+                    MonitoringService.debug('Using external enterprise token', {
+                        userId: userId.substring(0, 8) + '...',
+                        timestamp: new Date().toISOString()
+                    }, 'auth');
+                }
+
+                // Pattern 2: User Activity Logs
+                MonitoringService.info('Access token retrieved from external source', {
+                    operation: 'getAccessToken',
+                    source: 'external_token',
+                    duration: Date.now() - startTime,
+                    timestamp: new Date().toISOString()
+                }, 'auth', null, userId);
+
+                return externalToken;
+            }
+        } catch (extError) {
+            // External token check failed - continue with normal flow
+            if (process.env.NODE_ENV === 'development') {
+                MonitoringService.debug('External token check failed, continuing with normal flow', {
+                    error: extError.message,
+                    timestamp: new Date().toISOString()
+                }, 'auth');
+            }
+        }
+
         const userSession = getUserSession(userId);
         if (userSession?.msUser?.accessToken) {
             // TODO: Check token expiration and refresh if needed

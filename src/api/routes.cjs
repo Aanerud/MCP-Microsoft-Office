@@ -12,6 +12,7 @@ const peopleControllerFactory = require('./controllers/people-controller.cjs');
 const logController = require('./controllers/log-controller.cjs');
 const authController = require('./controllers/auth-controller.cjs');
 const deviceAuthController = require('./controllers/device-auth-controller.cjs');
+const externalTokenController = require('./controllers/external-token-controller.cjs');
 const adapterController = require('./controllers/adapter-controller.cjs');
 const ErrorService = require('../core/error-service.cjs');
 const MonitoringService = require('../core/monitoring-service.cjs');
@@ -420,7 +421,16 @@ function registerRoutes(router) {
     
     // MCP token generation endpoint - requires authentication
     authRouter.post('/generate-mcp-token', requireAuth, deviceAuthController.generateMcpToken);
-    
+
+    // External token login endpoint - NO AUTH REQUIRED (this IS the login)
+    authRouter.post('/external-token/login', externalTokenController.loginWithToken);
+
+    // External token management endpoints - requires authentication
+    authRouter.post('/external-token', requireAuth, externalTokenController.inject);
+    authRouter.get('/external-token/status', requireAuth, externalTokenController.status);
+    authRouter.delete('/external-token', requireAuth, externalTokenController.clear);
+    authRouter.post('/external-token/switch', requireAuth, externalTokenController.switchSource);
+
     // OAuth 2.0 discovery endpoint
     authRouter.get('/.well-known/oauth-protected-resource', deviceAuthController.getResourceServerInfo);
     

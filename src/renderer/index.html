@@ -60,6 +60,48 @@
                 </div>
             </div>
 
+            <div id="external-token-section" class="sidebar-section">
+                <h3>Login with Enterprise Token</h3>
+                <p>Paste a Microsoft Graph token from an enterprise tool to authenticate.</p>
+                <textarea id="external-token-input" class="form-control" rows="4"
+                          placeholder="Paste your Microsoft Graph access token here..."></textarea>
+                <button id="inject-external-token-button" class="btn btn-primary mt-2">
+                    Login with Token
+                </button>
+
+                <div id="external-token-status" class="mt-2 hidden">
+                    <div class="token-info-card">
+                        <h4>Token Information</h4>
+                        <p><strong>User:</strong> <span id="ext-token-user">-</span></p>
+                        <p><strong>Email:</strong> <span id="ext-token-email">-</span></p>
+                        <p><strong>Scopes:</strong> <span id="ext-token-scope-count">0</span> permissions</p>
+                        <p><strong>Expires:</strong> <span id="ext-token-expires">-</span></p>
+                        <p><strong>Time Remaining:</strong> <span id="ext-token-countdown" class="token-countdown">-</span></p>
+
+                        <div id="ext-token-warning" class="alert alert-warning hidden">
+                            Token expires soon! Please paste a new token.
+                        </div>
+
+                        <details class="mt-2">
+                            <summary>View all scopes</summary>
+                            <div id="ext-token-scopes-list" class="scope-list"></div>
+                        </details>
+                    </div>
+
+                    <div class="token-source-toggle mt-2">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="use-external-token-toggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-label">Use External Token</span>
+                    </div>
+
+                    <button id="clear-external-token-button" class="btn btn-danger btn-sm mt-2">
+                        Clear External Token
+                    </button>
+                </div>
+            </div>
+
             <div id="adapter-download-section" class="sidebar-section hidden">
                 <!-- Device registration and adapter download will be populated here -->
             </div>

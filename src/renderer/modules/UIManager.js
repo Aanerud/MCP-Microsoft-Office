@@ -463,11 +463,23 @@ export class UIManager {
         const mcpTokenSection = document.getElementById('mcp-token-section');
         if (mcpTokenSection) {
             mcpTokenSection.classList.remove('hidden');
-            
+
             // Set up event listeners for MCP token generation
             this.setupMcpTokenListeners();
         }
-        
+
+        // Show the external token section
+        const externalTokenSection = document.getElementById('external-token-section');
+        if (externalTokenSection) {
+            externalTokenSection.classList.remove('hidden');
+
+            // Set up event listeners for external token
+            this.setupExternalTokenListeners();
+
+            // Check for existing external token
+            this.checkExternalTokenStatus();
+        }
+
         // Hide the old adapter download section if it exists
         const downloadSection = document.getElementById('adapter-download-section');
         if (downloadSection) {
@@ -1071,10 +1083,331 @@ export class UIManager {
         return window.currentSessionData || null;
     }
 
+    // =============================================
+    // External Token Management
+    // =============================================
+
+    /**
+     * External token countdown interval
+     */
+    externalTokenCountdownInterval = null;
+
+    /**
+     * Setup event listeners for external token section
+     */
+    setupExternalTokenListeners() {
+        // Inject token button
+        const injectButton = document.getElementById('inject-external-token-button');
+        if (injectButton) {
+            injectButton.onclick = () => this.injectExternalToken();
+        }
+
+        // Clear token button
+        const clearButton = document.getElementById('clear-external-token-button');
+        if (clearButton) {
+            clearButton.onclick = () => this.clearExternalToken();
+        }
+
+        // Toggle switch for using external token
+        const toggle = document.getElementById('use-external-token-toggle');
+        if (toggle) {
+            toggle.onchange = (e) => this.toggleExternalTokenSource(e.target.checked);
+        }
+    }
+
+    /**
+     * Inject external token from input field
+     * Uses login endpoint if not authenticated, inject endpoint if already authenticated
+     */
+    async injectExternalToken() {
+        const tokenInput = document.getElementById('external-token-input');
+        const injectButton = document.getElementById('inject-external-token-button');
+
+        if (!tokenInput || !tokenInput.value.trim()) {
+            UINotification.show('Please paste a token first', 'warning');
+            return;
+        }
+
+        try {
+            // Show loading state
+            if (injectButton) {
+                injectButton.disabled = true;
+                injectButton.textContent = 'Validating...';
+            }
+
+            UINotification.show('Validating external token...', 'info');
+
+            // Try the login endpoint first (works without auth)
+            // This will create a session if successful
+            const response = await fetch('/api/auth/external-token/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    access_token: tokenInput.value.trim()
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || result.error || 'Token validation failed');
+            }
+
+            // Clear input and show success
+            tokenInput.value = '';
+
+            if (result.authenticated) {
+                UINotification.show(`Logged in as ${result.user?.name || result.user?.email}!`, 'success');
+
+                // Update authenticated state
+                this.showAuthenticatedState({
+                    user: result.user?.email,
+                    name: result.user?.name,
+                    authenticated: true
+                });
+            } else {
+                UINotification.show('External token injected successfully!', 'success');
+            }
+
+            // Display token info
+            this.displayExternalTokenInfo(result.metadata);
+
+        } catch (error) {
+            console.error('External token injection failed:', error);
+            UINotification.show(`Token injection failed: ${error.message}`, 'error');
+        } finally {
+            // Reset button state
+            if (injectButton) {
+                injectButton.disabled = false;
+                injectButton.textContent = 'Login with Token';
+            }
+        }
+    }
+
+    /**
+     * Display external token information
+     */
+    displayExternalTokenInfo(metadata) {
+        const statusDiv = document.getElementById('external-token-status');
+        const userSpan = document.getElementById('ext-token-user');
+        const emailSpan = document.getElementById('ext-token-email');
+        const scopeCountSpan = document.getElementById('ext-token-scope-count');
+        const expiresSpan = document.getElementById('ext-token-expires');
+        const scopesList = document.getElementById('ext-token-scopes-list');
+        const toggle = document.getElementById('use-external-token-toggle');
+        const warning = document.getElementById('ext-token-warning');
+
+        if (userSpan) {
+            userSpan.textContent = metadata.user?.name || 'Unknown';
+        }
+
+        if (emailSpan) {
+            emailSpan.textContent = metadata.user?.email || 'Unknown';
+        }
+
+        if (scopeCountSpan) {
+            scopeCountSpan.textContent = metadata.scopes?.length || 0;
+        }
+
+        if (expiresSpan) {
+            const expiresAt = new Date(metadata.expires_at);
+            expiresSpan.textContent = expiresAt.toLocaleString();
+        }
+
+        if (scopesList) {
+            scopesList.innerHTML = metadata.scopes?.map(scope =>
+                `<span class="scope-badge">${scope}</span>`
+            ).join('') || 'No scopes';
+        }
+
+        if (toggle) {
+            toggle.checked = true; // Default to using external token
+        }
+
+        if (warning) {
+            warning.classList.toggle('hidden', !metadata.is_expiring_soon);
+        }
+
+        if (statusDiv) {
+            statusDiv.classList.remove('hidden');
+        }
+
+        // Start countdown timer
+        this.startExternalTokenCountdown(metadata.expires_at);
+    }
+
+    /**
+     * Start countdown timer for external token expiry
+     */
+    startExternalTokenCountdown(expiresAt) {
+        // Clear existing interval
+        if (this.externalTokenCountdownInterval) {
+            clearInterval(this.externalTokenCountdownInterval);
+        }
+
+        const countdownSpan = document.getElementById('ext-token-countdown');
+        const warning = document.getElementById('ext-token-warning');
+        const expiryTime = new Date(expiresAt).getTime();
+
+        const updateCountdown = () => {
+            const now = Date.now();
+            const remaining = Math.max(0, expiryTime - now);
+
+            if (remaining === 0) {
+                if (countdownSpan) {
+                    countdownSpan.textContent = 'EXPIRED';
+                    countdownSpan.classList.add('expired');
+                }
+                if (warning) {
+                    warning.classList.remove('hidden');
+                    warning.textContent = 'Token has expired! Please paste a new token.';
+                }
+                clearInterval(this.externalTokenCountdownInterval);
+                return;
+            }
+
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+
+            if (countdownSpan) {
+                countdownSpan.textContent = `${minutes}m ${seconds}s`;
+                countdownSpan.classList.toggle('warning', minutes < 10);
+            }
+
+            if (warning && minutes < 10) {
+                warning.classList.remove('hidden');
+            }
+        };
+
+        // Update immediately and then every second
+        updateCountdown();
+        this.externalTokenCountdownInterval = setInterval(updateCountdown, 1000);
+    }
+
+    /**
+     * Clear external token
+     */
+    async clearExternalToken() {
+        try {
+            UINotification.show('Clearing external token...', 'info');
+
+            const response = await fetch('/api/auth/external-token', {
+                method: 'DELETE',
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.message || 'Failed to clear token');
+            }
+
+            // Clear countdown interval
+            if (this.externalTokenCountdownInterval) {
+                clearInterval(this.externalTokenCountdownInterval);
+                this.externalTokenCountdownInterval = null;
+            }
+
+            // Hide status section
+            const statusDiv = document.getElementById('external-token-status');
+            if (statusDiv) {
+                statusDiv.classList.add('hidden');
+            }
+
+            // Reset toggle
+            const toggle = document.getElementById('use-external-token-toggle');
+            if (toggle) {
+                toggle.checked = false;
+            }
+
+            UINotification.show('External token cleared', 'success');
+
+        } catch (error) {
+            console.error('Failed to clear external token:', error);
+            UINotification.show(`Failed to clear token: ${error.message}`, 'error');
+        }
+    }
+
+    /**
+     * Toggle between external token and OAuth
+     */
+    async toggleExternalTokenSource(useExternal) {
+        try {
+            const response = await fetch('/api/auth/external-token/switch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    source: useExternal ? 'external' : 'oauth'
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.message || 'Failed to switch token source');
+            }
+
+            UINotification.show(
+                `Now using ${useExternal ? 'external enterprise' : 'OAuth'} token`,
+                'success'
+            );
+
+        } catch (error) {
+            console.error('Failed to switch token source:', error);
+            UINotification.show(`Failed to switch: ${error.message}`, 'error');
+
+            // Reset toggle on error
+            const toggle = document.getElementById('use-external-token-toggle');
+            if (toggle) {
+                toggle.checked = !useExternal;
+            }
+        }
+    }
+
+    /**
+     * Check and display external token status on page load
+     */
+    async checkExternalTokenStatus() {
+        try {
+            const response = await fetch('/api/auth/external-token/status', {
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                return; // Not authenticated or no token
+            }
+
+            const status = await response.json();
+
+            if (status.has_external_token && status.metadata) {
+                this.displayExternalTokenInfo(status.metadata);
+
+                // Set toggle based on current source
+                const toggle = document.getElementById('use-external-token-toggle');
+                if (toggle) {
+                    toggle.checked = status.is_active;
+                }
+            }
+
+        } catch (error) {
+            // Silent fail - external token is optional
+            console.debug('External token status check failed:', error.message);
+        }
+    }
+
     /**
      * Cleanup UI Manager resources
      */
     destroy() {
+        // Clear external token countdown
+        if (this.externalTokenCountdownInterval) {
+            clearInterval(this.externalTokenCountdownInterval);
+        }
         this.renderCallbacks.clear();
         this.initialized = false;
         if (window.MonitoringService) {
@@ -1100,6 +1433,11 @@ if (typeof window !== 'undefined') {
         pollForToken: (deviceId) => window.UIManagerInstance.pollForToken(deviceId),
         copyUserCode: (userCode) => window.UIManagerInstance.copyUserCode(userCode),
         createMCPSession: () => window.UIManagerInstance.createMCPSession(),
-        testAPIConnectivity: (deviceId) => window.UIManagerInstance.testAPIConnectivity(deviceId)
+        testAPIConnectivity: (deviceId) => window.UIManagerInstance.testAPIConnectivity(deviceId),
+        // External token methods
+        injectExternalToken: () => window.UIManagerInstance.injectExternalToken(),
+        clearExternalToken: () => window.UIManagerInstance.clearExternalToken(),
+        toggleExternalTokenSource: (useExternal) => window.UIManagerInstance.toggleExternalTokenSource(useExternal),
+        checkExternalTokenStatus: () => window.UIManagerInstance.checkExternalTokenStatus()
     };
 }

@@ -609,6 +609,98 @@ async function getSecure(key, userId, sessionId) {
 }
 
 /**
+ * Delete an encrypted setting from the database
+ * @param {string} key - The setting key
+ * @param {string} userId - User identifier
+ * @param {string} [sessionId] - Session identifier for logging
+ */
+async function deleteSecure(key, userId, sessionId) {
+    const startTime = Date.now();
+
+    try {
+        // Pattern 1: Development Debug Logs
+        if (process.env.NODE_ENV === 'development') {
+            MonitoringService.debug('Delete secure setting operation started', {
+                key,
+                userId,
+                sessionId,
+                timestamp: new Date().toISOString()
+            }, 'storage');
+        }
+
+        const connection = await getConnection();
+        await connection.query('DELETE FROM secure_settings WHERE key = ? AND user_id = ?', [key, userId]);
+        connection.release();
+
+        const executionTime = Date.now() - startTime;
+
+        // Pattern 2: User Activity Logs
+        if (userId) {
+            MonitoringService.info('Secure setting deleted successfully', {
+                key,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'storage', null, userId);
+        } else if (sessionId) {
+            MonitoringService.info('Secure setting deleted with session', {
+                sessionId,
+                key,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'storage');
+        }
+
+        MonitoringService.trackMetric('storage_delete_secure_success', executionTime, {
+            key,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        // Pattern 3: Infrastructure Error Logging
+        const mcpError = ErrorService.createError(
+            'storage',
+            `Failed to delete secure setting: ${error.message}`,
+            'error',
+            {
+                key,
+                stack: error.stack,
+                userId,
+                sessionId,
+                timestamp: new Date().toISOString()
+            }
+        );
+        MonitoringService.logError(mcpError);
+
+        // Pattern 4: User Error Tracking
+        if (userId) {
+            MonitoringService.error('Secure setting deletion failed', {
+                key,
+                error: error.message,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'storage', null, userId);
+        } else if (sessionId) {
+            MonitoringService.error('Secure setting deletion failed', {
+                sessionId,
+                key,
+                error: error.message,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'storage');
+        }
+        MonitoringService.trackMetric('storage_delete_secure_failure', executionTime, {
+            key,
+            errorType: error.code || 'unknown',
+            timestamp: new Date().toISOString()
+        });
+
+        throw mcpError;
+    }
+}
+
+/**
  * Store a user-specific log
  * @param {string} userId - User ID
  * @param {string} level - Log level (error, warn, info, debug)
@@ -1888,6 +1980,7 @@ module.exports = {
     getSetting,
     setSecureSetting: setSecure,
     getSecureSetting: getSecure,
+    deleteSecureSetting: deleteSecure,
     addHistory,
     getHistory,
     registerDevice,

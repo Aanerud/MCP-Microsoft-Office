@@ -157,9 +157,12 @@ export class AppController {
      */
     async initializeAuthState() {
         try {
+            // Always setup external token listeners (login with token works without auth)
+            this.uiManager.setupExternalTokenListeners();
+
             // Check authentication status on app load
             await this.uiManager.refreshAuthenticationState();
-            
+
         } catch (error) {
             console.error('Failed to initialize auth state:', error);
             this.uiManager.showUnauthenticatedState();
