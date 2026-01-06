@@ -16,13 +16,13 @@ const TENANT_ID = process.env.MICROSOFT_TENANT_ID || 'common';
 const REDIRECT_URI = process.env.MICROSOFT_REDIRECT_URI || 'http://localhost:3000/api/auth/callback';
 // Use scopes that match the permissions granted in Azure AD
 const SCOPES = [
-    'User.Read',        // Sign in and read user profile
+    'User.Read',           // Sign in and read user profile
     'openid',
     'profile',
     'email',
-    'Calendars.ReadWrite',  // Full access to user calendars
+    'Calendars.ReadWrite', // Full access to user calendars
     'Mail.ReadWrite',      // Read and write access to user mail
-    'Mail.Send',          // Send mail as a user
+    'Mail.Send',           // Send mail as a user
     'Files.ReadWrite'      // Full access to user files
 ];
 
