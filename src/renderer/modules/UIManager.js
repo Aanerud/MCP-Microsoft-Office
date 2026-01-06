@@ -580,16 +580,26 @@ export class UIManager {
         if (configExample) {
             const serverUrl = window.location.origin;
 
-            // Remote MCP server config with token in URL
-            const remoteConfigJson = {
+            // mcp-remote config format for Claude Desktop
+            // Note: No spaces around ':' in header arg (Claude Desktop bug workaround)
+            const configJson = {
                 mcpServers: {
                     "microsoft-365": {
-                        url: `${serverUrl}/api/mcp/sse?token=${tokenData.access_token}`
+                        command: "npx",
+                        args: [
+                            "mcp-remote",
+                            `${serverUrl}/api/mcp/sse`,
+                            "--header",
+                            "Authorization:${MCP_AUTH}"
+                        ],
+                        env: {
+                            MCP_AUTH: `Bearer ${tokenData.access_token}`
+                        }
                     }
                 }
             };
 
-            configExample.textContent = JSON.stringify(remoteConfigJson, null, 2);
+            configExample.textContent = JSON.stringify(configJson, null, 2);
         }
 
         if (resultDiv) {
