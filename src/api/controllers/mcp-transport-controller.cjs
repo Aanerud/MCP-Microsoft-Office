@@ -328,6 +328,10 @@ async function handleMCPMessage(message, req, sessionId) {
 /**
  * SSE endpoint for receiving server messages
  * GET /api/mcp/sse
+ *
+ * Supports authentication via:
+ * - Authorization header (Bearer token)
+ * - Query parameter: ?token=xxx
  */
 async function sseConnect(req, res) {
     const sessionId = generateSessionId();

@@ -580,22 +580,16 @@ export class UIManager {
         if (configExample) {
             const serverUrl = window.location.origin;
 
-            // SSE Transport config (recommended - no local files needed)
-            const sseConfigJson = {
+            // Remote MCP server config with token in URL
+            const remoteConfigJson = {
                 mcpServers: {
                     "microsoft-365": {
-                        transport: {
-                            type: "sse",
-                            url: `${serverUrl}/api/mcp/sse`,
-                            headers: {
-                                Authorization: `Bearer ${tokenData.access_token}`
-                            }
-                        }
+                        url: `${serverUrl}/api/mcp/sse?token=${tokenData.access_token}`
                     }
                 }
             };
 
-            configExample.textContent = JSON.stringify(sseConfigJson, null, 2);
+            configExample.textContent = JSON.stringify(remoteConfigJson, null, 2);
         }
 
         if (resultDiv) {

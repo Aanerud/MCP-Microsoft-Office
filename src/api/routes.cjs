@@ -469,10 +469,19 @@ function registerRoutes(router) {
     const mcpRouter = express.Router();
     mcpRouter.use(controllerLogger());
 
+    // Middleware to extract token from query parameter (for SSE connections)
+    // This allows: /api/mcp/sse?token=xxx
+    mcpRouter.use((req, res, next) => {
+        if (req.query.token && !req.headers.authorization) {
+            req.headers.authorization = `Bearer ${req.query.token}`;
+        }
+        next();
+    });
+
     // Info endpoint - no auth required
     mcpRouter.get('/info', mcpTransportController.getInfo);
 
-    // SSE endpoint - requires authentication (via Bearer token or session)
+    // SSE endpoint - requires authentication (via Bearer token, query param, or session)
     mcpRouter.get('/sse', requireAuth, mcpTransportController.sseConnect);
 
     // Message endpoint - requires authentication
