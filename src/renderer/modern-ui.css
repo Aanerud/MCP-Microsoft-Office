@@ -1483,6 +1483,24 @@ body {
     flex: 1;
 }
 
+.config-help {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.config-help code {
+    background: var(--neutral-90);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.75rem;
+}
+
+.config-help small {
+    color: var(--text-muted);
+}
+
 .btn-sm {
     padding: 4px 8px;
     font-size: 0.75rem;

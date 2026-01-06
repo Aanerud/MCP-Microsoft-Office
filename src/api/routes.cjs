@@ -14,6 +14,7 @@ const authController = require('./controllers/auth-controller.cjs');
 const deviceAuthController = require('./controllers/device-auth-controller.cjs');
 const externalTokenController = require('./controllers/external-token-controller.cjs');
 const adapterController = require('./controllers/adapter-controller.cjs');
+const mcpTransportController = require('./controllers/mcp-transport-controller.cjs');
 const ErrorService = require('../core/error-service.cjs');
 const MonitoringService = require('../core/monitoring-service.cjs');
 const { requireAuth } = require('./middleware/auth-middleware.cjs');
@@ -457,12 +458,30 @@ function registerRoutes(router) {
             res.setHeader('Content-Disposition', 'attachment; filename="mcp-adapter.cjs"');
             res.sendFile(adapterPath);
         } catch (error) {
-            res.status(500).json({ 
-                error: 'ADAPTER_DOWNLOAD_FAILED', 
-                error_description: 'Failed to serve MCP adapter' 
+            res.status(500).json({
+                error: 'ADAPTER_DOWNLOAD_FAILED',
+                error_description: 'Failed to serve MCP adapter'
             });
         }
     });
+
+    // --- MCP Transport Router (SSE transport for direct Claude Desktop connection) ---
+    const mcpRouter = express.Router();
+    mcpRouter.use(controllerLogger());
+
+    // Info endpoint - no auth required
+    mcpRouter.get('/info', mcpTransportController.getInfo);
+
+    // SSE endpoint - requires authentication (via Bearer token or session)
+    mcpRouter.get('/sse', requireAuth, mcpTransportController.sseConnect);
+
+    // Message endpoint - requires authentication
+    mcpRouter.post('/message', requireAuth, mcpTransportController.handleMessage);
+
+    // Simple HTTP endpoint - requires authentication
+    mcpRouter.post('/', requireAuth, mcpTransportController.handleSimpleMessage);
+
+    router.use('/mcp', mcpRouter);
 
     // Debug routes (development only)
     if (process.env.NODE_ENV === 'development') {

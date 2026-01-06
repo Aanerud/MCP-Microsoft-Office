@@ -579,25 +579,23 @@ export class UIManager {
 
         if (configExample) {
             const serverUrl = window.location.origin;
-            const hostname = window.location.hostname;
-            const port = window.location.protocol === 'https:' ? '443' : '80';
-            
-            const configJson = {
+
+            // SSE Transport config (recommended - no local files needed)
+            const sseConfigJson = {
                 mcpServers: {
-                    microsoft365: {
-                        command: "node",
-                        args: ["~/mcp-adapters/mcp-adapter.cjs"],
-                        env: {
-                            MCP_SERVER_URL: serverUrl,
-                            API_HOST: hostname,
-                            API_PORT: port,
-                            API_BASE_PATH: "/api",
-                            MCP_BEARER_TOKEN: tokenData.access_token
+                    "microsoft-365": {
+                        transport: {
+                            type: "sse",
+                            url: `${serverUrl}/api/mcp/sse`,
+                            headers: {
+                                Authorization: `Bearer ${tokenData.access_token}`
+                            }
                         }
                     }
                 }
             };
-            configExample.textContent = JSON.stringify(configJson, null, 2);
+
+            configExample.textContent = JSON.stringify(sseConfigJson, null, 2);
         }
 
         if (resultDiv) {
