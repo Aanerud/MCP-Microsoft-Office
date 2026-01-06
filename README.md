@@ -33,14 +33,17 @@ npm install  # ✨ This does EVERYTHING automatically! ( i hope! )
 - ✅ Initializes logging and monitoring systems
 - ✅ Prepares multi-user session management
 
-### 2. **Add Your Microsoft 365 Credentials** 🔑
-Edit the auto-generated `.env` file:
+### 2. **Configure Azure App Registration** 🔑
+
+You need to create an App Registration in Azure Entra ID (formerly Azure AD). Follow the detailed guide below.
+
+📋 **Azure Portal:** [App Registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
+
+After setup, edit the auto-generated `.env` file:
 ```bash
 MICROSOFT_CLIENT_ID=your_client_id_here
 MICROSOFT_TENANT_ID=your_tenant_id_here
 ```
-
-📋 **Get these from:** [Azure App Registration Portal](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
 
 ### 3. **Launch Your Server** 🎯
 ```bash
@@ -48,6 +51,121 @@ npm run dev:web  # Full development mode with comprehensive logging
 ```
 
 🌐 **Access your server at:** `http://localhost:3000`
+
+---
+
+## 🔐 Azure App Registration Setup
+
+This section provides detailed instructions for configuring your Azure Entra ID (Azure AD) App Registration.
+
+### Step 1: Create App Registration
+
+1. Go to [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations**
+2. Click **+ New registration**
+3. Configure:
+   - **Name**: `MCP-Microsoft-Office` (or your preferred name)
+   - **Supported account types**: Choose based on your needs:
+     - *Single tenant*: Only your organization
+     - *Multitenant*: Any Microsoft Entra ID tenant
+   - **Redirect URI**: Leave blank for now (configure in Step 3)
+4. Click **Register**
+5. Note your **Application (client) ID** and **Directory (tenant) ID**
+
+### Step 2: Configure API Permissions
+
+Go to **API permissions** → **+ Add a permission** → **Microsoft Graph** → **Delegated permissions**
+
+#### Required Permissions
+
+| Permission | Description | Admin Consent Required |
+|------------|-------------|----------------------|
+| `User.Read` | Sign in and read user profile | No |
+| `Mail.ReadWrite` | Read and write user mail | Yes* |
+| `Mail.Send` | Send mail as user | Yes* |
+| `Calendars.ReadWrite` | Full access to user calendars | Yes* |
+| `Files.ReadWrite` | Full access to user files | Yes* |
+
+*Admin consent may be required in enterprise tenants
+
+#### Optional Permissions (for People API)
+
+| Permission | Description |
+|------------|-------------|
+| `People.Read` | Read users' relevant people lists |
+| `Contacts.Read` | Read user contacts |
+
+### Step 3: Configure Authentication
+
+Go to **Authentication** in the left sidebar:
+
+#### Add Platform
+1. Click **+ Add a platform**
+2. Select **Web** (NOT "Single-page application")
+3. Add Redirect URI:
+   ```
+   https://your-domain.com/api/auth/callback
+   ```
+   For local development:
+   ```
+   http://localhost:3000/api/auth/callback
+   ```
+4. Click **Configure**
+
+#### Enable Implicit Grant (optional)
+Under **Implicit grant and hybrid flows**:
+- ✅ Access tokens
+- ✅ ID tokens
+
+#### Advanced Settings
+Scroll down to **Advanced settings**:
+- **Allow public client flows**: Set to **Yes**
+  - This enables the Device Code Flow used by MCP adapters
+
+### Step 4: Admin Consent
+
+**Important for Enterprise Tenants:**
+
+If you see "Needs admin approval" when logging in, the permissions require admin consent.
+
+#### Option A: Grant Admin Consent (if you're an admin)
+1. Go to **API permissions**
+2. Click **Grant admin consent for [Your Organization]**
+3. Confirm the prompt
+
+#### Option B: Request Admin Consent (if you're not an admin)
+1. Contact your IT administrator
+2. Provide them the App Registration name/ID
+3. Ask them to grant admin consent for the listed permissions
+
+### Step 5: Environment Configuration
+
+Add to your `.env` file:
+```bash
+# From App Registration Overview page
+MICROSOFT_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+MICROSOFT_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+
+# Your server URL (must match redirect URI)
+MICROSOFT_REDIRECT_URI=https://your-domain.com/api/auth/callback
+```
+
+### Common Issues
+
+#### "AADSTS7000218: client_assertion or client_secret required"
+**Cause**: App is configured as Confidential Client
+**Fix**: Enable "Allow public client flows" in Authentication settings
+
+#### "Needs administrator approval"
+**Cause**: Permissions require admin consent in your tenant
+**Fix**: Have an admin grant consent, or use a personal Microsoft account for testing
+
+#### "Invalid redirect URI"
+**Cause**: Redirect URI mismatch between app registration and server
+**Fix**: Ensure the URI in Authentication matches your `MICROSOFT_REDIRECT_URI` exactly
+
+#### "Platform type mismatch"
+**Cause**: Using "Single-page application" instead of "Web"
+**Fix**: Remove SPA platform, add "Web" platform with same redirect URI
 
 ---
 
