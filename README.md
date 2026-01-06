@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/aanerud-mcp-microsoft-office-badge.png)](https://mseep.ai/app/aanerud-mcp-microsoft-office)
+
 # 🚀 MCP Microsoft Office - Enterprise-Grade Microsoft 365 Integration
 
 **The most comprehensive, secure, and user-focused MCP server for Microsoft 365**
