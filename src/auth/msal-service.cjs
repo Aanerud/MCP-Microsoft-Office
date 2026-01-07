@@ -541,9 +541,11 @@ async function handleAuthCallback(req, res) {
         if (req.session) {
             req.session.msUser = userInfo;
         }
-        
-        // Store in user session map
-        setUserSession(userInfo.homeAccountId, { msUser: userInfo });
+
+        // Store in user session map using ms365:email as the key
+        // This ensures MCP adapter lookups (which use ms365:email) can find the token
+        const memoryKey = `ms365:${userInfo.username}`;
+        setUserSession(memoryKey, { msUser: userInfo });
         
         // Clean up temporary session
         delete req.session.pkceCodeVerifier;
