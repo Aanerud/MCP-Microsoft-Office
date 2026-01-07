@@ -1437,7 +1437,8 @@ async function getMostRecentToken(userId) {
             }, 'auth');
         }
         try {
-            const tokenKey = userId ? `user:${userId}:ms-access-token` : 'ms-access-token';
+            // Use consistent key format: ms365:email:ms-access-token (matches OAuth callback storage)
+            const tokenKey = userId ? `${userId}:ms-access-token` : 'ms-access-token';
             const storedToken = await storageService.getSecureSetting(tokenKey, userId);
             if (storedToken) {
                 if (process.env.NODE_ENV === 'development') {
@@ -1447,9 +1448,9 @@ async function getMostRecentToken(userId) {
                         timestamp: new Date().toISOString()
                     }, 'auth');
                 }
-                
+
                 // Also load it into memory for future use
-                const userInfoKey = userId ? `user:${userId}:ms-user-info` : 'ms-user-info';
+                const userInfoKey = userId ? `${userId}:ms-user-info` : 'ms-user-info';
                 const userInfo = await storageService.getSetting(userInfoKey, userId) || {};
                 if (userId) {
                     setUserSession(userId, {
