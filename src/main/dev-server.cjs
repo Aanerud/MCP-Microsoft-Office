@@ -615,10 +615,27 @@ async function startDevServer(userId, sessionId) {
       issuer: baseUrl,
       authorization_endpoint: `${baseUrl}/api/auth/login`,
       token_endpoint: `${baseUrl}/api/auth/device/token`,
+      registration_endpoint: `${baseUrl}/oauth/register`,
       response_types_supported: ['code'],
       grant_types_supported: ['authorization_code', 'urn:ietf:params:oauth:grant-type:device_code'],
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none']
+    });
+  });
+
+  // OAuth 2.0 Dynamic Client Registration (RFC 7591)
+  // Required by mcp-remote for automatic client setup
+  app.post('/oauth/register', express.json(), (req, res) => {
+    // Generate a simple client_id for the requesting client
+    const clientId = `mcp-client-${Date.now()}`;
+
+    res.status(201).json({
+      client_id: clientId,
+      client_secret_expires_at: 0, // Never expires
+      grant_types: req.body.grant_types || ['authorization_code'],
+      redirect_uris: req.body.redirect_uris || [],
+      response_types: req.body.response_types || ['code'],
+      token_endpoint_auth_method: 'none'
     });
   });
 
