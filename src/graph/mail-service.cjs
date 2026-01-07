@@ -178,20 +178,10 @@ async function searchEmails(query, options = {}, req, userId, sessionId) {
     const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
     const top = options.top || options.limit || 10;
     
-    // Format the query for KQL syntax
-    let cleanQuery = query.trim();
-    if (cleanQuery.startsWith('"') && cleanQuery.endsWith('"')) {
-      cleanQuery = cleanQuery.slice(1, -1);
-    }
-    
-    // Fix common KQL syntax issues
-    if (cleanQuery.match(/([\w]+):(\S+)/)) {
-      cleanQuery = cleanQuery.replace(/from:(\S+)/gi, '$1');
-      cleanQuery = cleanQuery.replace(/subject:(\S+)/gi, '$1');
-      cleanQuery = cleanQuery.replace(/received:(\S+)/gi, '$1');
-    }
-    
-    const searchUrl = `/me/messages?$search=${encodeURIComponent(cleanQuery)}&$top=${top}`;
+    // Pass query through - let the LLM handle formatting
+    const cleanQuery = query.trim();
+
+    const searchUrl = `/me/messages?$search="${encodeURIComponent(cleanQuery)}"&$top=${top}`;
     const res = await client.api(searchUrl, contextUserId, contextSessionId).get();
     const emails = (res.value || []).map(normalizeEmail);
     
