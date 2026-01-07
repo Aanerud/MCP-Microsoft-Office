@@ -60,10 +60,16 @@ When adding a new Microsoft Graph capability to the system, the following compon
 - ✅ User profile access
 
 #### Improved Mail
-- 🔄 Better attachment handling
+- ✅ Better attachment handling
 - 🔄 Email drafts
-- 🔄 Enhanced search capabilities
+- ✅ Enhanced search capabilities (unified search)
 - 🔄 Email categorization
+
+#### Unified Search (Completed)
+- ✅ Cross-entity search (messages, files, events, people)
+- ✅ KQL query support
+- ✅ Spelling suggestions and corrections
+- ✅ Entity type filtering
 
 #### Advanced Calendar
 - ✅ Meeting scheduling with availability check
@@ -79,11 +85,12 @@ When adding a new Microsoft Graph capability to the system, the following compon
 
 ### Phase 3: Advanced Integration
 
-#### Teams Integration
-- Meeting chat access
-- Teams message access
-- Channel and team management
-- Teams file integration
+#### Teams Integration (Completed)
+- ✅ Meeting chat access
+- ✅ Teams message access
+- ✅ Channel and team management
+- ✅ Teams file integration
+- ✅ Online meeting creation
 
 #### OneNote Integration
 - Notebook access

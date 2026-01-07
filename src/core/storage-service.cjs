@@ -15,7 +15,17 @@ const { getConfig } = require('../config/index.cjs');
 
 // Legacy SQLite path for backward compatibility
 const DB_PATH = path.join(__dirname, '../../data/mcp.sqlite');
-const ENCRYPTION_KEY = process.env.DEVICE_REGISTRY_ENCRYPTION_KEY || process.env.MCP_ENCRYPTION_KEY || 'dev_default_key_32bytes_long__!!';
+
+// SEC-1: Encryption key must be set via environment variable in production
+const ENCRYPTION_KEY = process.env.DEVICE_REGISTRY_ENCRYPTION_KEY || process.env.MCP_ENCRYPTION_KEY;
+if (!ENCRYPTION_KEY) {
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error('CRITICAL: DEVICE_REGISTRY_ENCRYPTION_KEY or MCP_ENCRYPTION_KEY environment variable must be set in production');
+    }
+    // Development-only fallback with warning
+    console.warn('[SECURITY WARNING] Using default encryption key - set DEVICE_REGISTRY_ENCRYPTION_KEY for production');
+}
+const EFFECTIVE_ENCRYPTION_KEY = ENCRYPTION_KEY || 'dev_default_key_32bytes_long__!!';
 
 // Service instances
 let migrationManager = null;
@@ -28,13 +38,13 @@ MonitoringService.info('Storage service initialized', {
     timestamp: new Date().toISOString()
 }, 'storage');
 
-if (Buffer.from(ENCRYPTION_KEY).length !== 32) {
+if (Buffer.from(EFFECTIVE_ENCRYPTION_KEY).length !== 32) {
     const mcpError = ErrorService.createError(
         ErrorService.CATEGORIES.SYSTEM,
         'DEVICE_REGISTRY_ENCRYPTION_KEY must be exactly 32 bytes for AES-256-CBC',
         ErrorService.SEVERITIES.CRITICAL,
         {
-            keyLength: Buffer.from(ENCRYPTION_KEY).length,
+            keyLength: Buffer.from(EFFECTIVE_ENCRYPTION_KEY).length,
             requiredLength: 32,
             timestamp: new Date().toISOString()
         }
@@ -65,7 +75,7 @@ function encrypt(text) {
         }
         
         const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+        const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(EFFECTIVE_ENCRYPTION_KEY), iv);
         let encrypted = cipher.update(text, 'utf8', 'base64');
         encrypted += cipher.final('base64');
         const result = iv.toString('base64') + ':' + encrypted;
@@ -118,7 +128,7 @@ function decrypt(data) {
         }
         
         const iv = Buffer.from(ivStr, 'base64');
-        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(ENCRYPTION_KEY), iv);
+        const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(EFFECTIVE_ENCRYPTION_KEY), iv);
         let decrypted = decipher.update(encrypted, 'base64', 'utf8');
         decrypted += decipher.final('utf8');
         

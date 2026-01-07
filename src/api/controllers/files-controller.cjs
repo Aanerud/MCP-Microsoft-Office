@@ -5,7 +5,7 @@
 const Joi = require('joi');
 const ErrorService = require('../../core/error-service.cjs');
 const MonitoringService = require('../../core/monitoring-service.cjs');
-const filesModule = require('../../modules/files');
+const filesModule = require('../../modules/files/index.cjs');
 
 /**
  * Helper function to call module methods with fallback support

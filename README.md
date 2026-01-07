@@ -14,7 +14,7 @@ This project creates a bridge between AI assistants (like Claude) and Microsoft 
 
 **Key Benefits:**
 
-- **70 Tools** - Email, Calendar, Files, Teams, Contacts, To-Do, and more
+- **71 Tools** - Email, Calendar, Files, Teams, Contacts, To-Do, Search, and more
 - **Multi-User** - One server can support your entire team, each with their own data
 - **Your Control** - Run locally on your computer or deploy to your own server
 - **Secure** - All tokens encrypted, no data stored on third-party servers
@@ -304,7 +304,7 @@ This server can support multiple users at once, each with completely separate da
 
 ---
 
-## Available Tools (70 Total)
+## Available Tools (71 Total)
 
 ### Email (9 tools)
 | Tool | Description |
@@ -370,14 +370,14 @@ This server can support multiple users at once, each with completely separate da
 ### People (3 tools)
 | Tool | Description |
 |------|-------------|
-| `find` | Find people by name |
-| `search` | Search directory |
+| `findPeople` | Find people by name in directory |
 | `getRelevantPeople` | Get frequent contacts |
+| `getPersonById` | Get detailed person information |
 
 ### Search (1 tool)
 | Tool | Description |
 |------|-------------|
-| `search` | Unified search across Microsoft 365 |
+| `search` | Unified search across Microsoft 365 (emails, files, events, people) |
 
 ### To-Do (11 tools)
 | Tool | Description |
@@ -418,16 +418,34 @@ This server can support multiple users at once, each with completely separate da
 
 Configure these in your `.env` file:
 
+### Required Variables
+
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `MICROSOFT_CLIENT_ID` | Yes | Azure App Client ID | - |
 | `MICROSOFT_TENANT_ID` | Yes | Azure Tenant ID | `common` |
+
+### Security Variables (Required in Production)
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `DEVICE_REGISTRY_ENCRYPTION_KEY` | Prod | 32-byte key for encrypting tokens | Dev fallback |
+| `JWT_SECRET` | Prod | Secret for signing JWT tokens | Random (tokens invalid after restart) |
+| `CORS_ALLOWED_ORIGINS` | Prod | Comma-separated allowed origins | `*` in dev only |
+
+### Optional Variables
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
 | `MICROSOFT_REDIRECT_URI` | No | OAuth callback URL | `http://localhost:3000/api/auth/callback` |
 | `PORT` | No | Server port | `3000` |
 | `NODE_ENV` | No | Environment mode | `development` |
 | `MCP_TOKEN_SECRET` | No | Secret for MCP tokens | Auto-generated |
 | `MCP_TOKEN_EXPIRY` | No | Token expiry in seconds | `2592000` (30 days) |
 | `DATABASE_TYPE` | No | Database type | `sqlite` |
+| `RATE_LIMIT_WINDOW_MS` | No | Rate limit window in ms | `900000` (15 min) |
+| `RATE_LIMIT_MAX` | No | Max requests per window | `100` |
+| `RATE_LIMIT_AUTH_MAX` | No | Max auth attempts per window | `20` |
 
 ---
 
@@ -497,6 +515,20 @@ Configure these in your `.env` file:
 - **Token Isolation**: Each user's tokens are stored separately and encrypted with different keys
 - **Session Expiry**: Sessions automatically expire after 24 hours
 - **HTTPS**: Use HTTPS for production deployments
+- **Rate Limiting**: Built-in rate limiting protects against brute-force attacks (configurable)
+- **CORS Protection**: Origin allowlist prevents unauthorized cross-origin requests in production
+- **Production Secrets**: Encryption keys and JWT secrets must be explicitly set in production
+
+### Production Security Checklist
+
+Before deploying to production, ensure you have:
+
+1. Set `NODE_ENV=production`
+2. Set `DEVICE_REGISTRY_ENCRYPTION_KEY` (exactly 32 bytes)
+3. Set `JWT_SECRET` (strong random string)
+4. Set `CORS_ALLOWED_ORIGINS` (e.g., `https://yourdomain.com`)
+5. Use HTTPS with valid SSL certificate
+6. Review rate limit settings for your use case
 
 ---
 

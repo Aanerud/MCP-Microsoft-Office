@@ -8,6 +8,29 @@ const graphClientFactory = require('./graph-client.cjs');
 const ErrorService = require('../core/error-service.cjs');
 const MonitoringService = require('../core/monitoring-service.cjs');
 
+// PERF-3: Graph API query limit constants
+const GRAPH_API_MAX_LIMIT = 1000; // Microsoft Graph API maximum for mail messages
+
+/**
+ * Validates and clamps a query limit to Graph API constraints
+ * @param {number} limit - Requested limit
+ * @param {number} defaultLimit - Default if not specified (default: 10)
+ * @returns {number} - Validated limit
+ */
+function validateQueryLimit(limit, defaultLimit = 10) {
+    const requested = limit || defaultLimit;
+    const validated = Math.min(Math.max(1, requested), GRAPH_API_MAX_LIMIT);
+    if (requested > GRAPH_API_MAX_LIMIT) {
+        MonitoringService.warn('Query limit exceeded Graph API max', {
+            requested,
+            applied: validated,
+            max: GRAPH_API_MAX_LIMIT,
+            timestamp: new Date().toISOString()
+        }, 'mail');
+    }
+    return validated;
+}
+
 // Log service initialization
 MonitoringService.info('Graph Mail Service initialized', {
     serviceName: 'graph-mail-service',
@@ -61,12 +84,12 @@ async function getInbox(options = {}, req, userId, sessionId) {
   
   try {
     const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
-    const top = options.top || options.limit || 10;
+    const top = validateQueryLimit(options.top || options.limit);
     const res = await client.api(`/me/mailFolders/inbox/messages?$top=${top}`, contextUserId, contextSessionId).get();
     const emails = (res.value || []).map(normalizeEmail);
-    
+
     const executionTime = Date.now() - startTime;
-    
+
     // Pattern 2: User Activity Logs
     if (contextUserId) {
       MonitoringService.info('Retrieved inbox emails successfully', {

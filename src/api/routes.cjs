@@ -4,10 +4,10 @@
  */
 
 const express = require('express');
-const queryControllerFactory = require('./controllers/query-controller.js');
-const mailControllerFactory = require('./controllers/mail-controller.js');
-const calendarControllerFactory = require('./controllers/calendar-controller.js');
-const filesControllerFactory = require('./controllers/files-controller.js');
+const queryControllerFactory = require('./controllers/query-controller.cjs');
+const mailControllerFactory = require('./controllers/mail-controller.cjs');
+const calendarControllerFactory = require('./controllers/calendar-controller.cjs');
+const filesControllerFactory = require('./controllers/files-controller.cjs');
 const peopleControllerFactory = require('./controllers/people-controller.cjs');
 const searchControllerFactory = require('./controllers/search-controller.cjs');
 const teamsControllerFactory = require('./controllers/teams-controller.cjs');
@@ -27,26 +27,111 @@ const { routesLogger, controllerLogger } = require('./middleware/request-logger.
 const apiContext = require('./api-context.cjs');
 const statusRouter = require('./status.cjs');
 
-/**
- * TODO: [Rate Limiting] Implement and configure rate limiting middleware
- * const rateLimiter = require('express-rate-limit');
- * const postLimiter = rateLimiter({ windowMs: 15 * 60 * 1000, max: 100 }); // Example: 100 requests per 15 mins
- */
-const placeholderRateLimit = (req, res, next) => next(); // Placeholder
+// SEC-3: Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000', 10); // 15 minutes default
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || '100', 10); // 100 requests per window default
+const RATE_LIMIT_AUTH_MAX = parseInt(process.env.RATE_LIMIT_AUTH_MAX || '20', 10); // 20 auth attempts per window
+
+// Simple in-memory rate limiter (use Redis in production cluster)
+const rateLimitStore = new Map();
+function createRateLimiter(maxRequests, windowMs = RATE_LIMIT_WINDOW_MS) {
+    return (req, res, next) => {
+        const key = req.ip || req.connection.remoteAddress || 'unknown';
+        const now = Date.now();
+
+        let record = rateLimitStore.get(key);
+        if (!record || now - record.start > windowMs) {
+            record = { count: 1, start: now };
+            rateLimitStore.set(key, record);
+        } else {
+            record.count++;
+        }
+
+        // Set rate limit headers
+        res.set('X-RateLimit-Limit', maxRequests.toString());
+        res.set('X-RateLimit-Remaining', Math.max(0, maxRequests - record.count).toString());
+        res.set('X-RateLimit-Reset', Math.ceil((record.start + windowMs) / 1000).toString());
+
+        if (record.count > maxRequests) {
+            MonitoringService.warn('Rate limit exceeded', {
+                ip: key,
+                path: req.path,
+                count: record.count,
+                limit: maxRequests,
+                timestamp: new Date().toISOString()
+            }, 'security');
+            return res.status(429).json({
+                error: 'TOO_MANY_REQUESTS',
+                error_description: 'Rate limit exceeded. Please try again later.',
+                retryAfter: Math.ceil((record.start + windowMs - now) / 1000)
+            });
+        }
+        next();
+    };
+}
+
+// Cleanup old rate limit entries every 5 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, record] of rateLimitStore.entries()) {
+        if (now - record.start > RATE_LIMIT_WINDOW_MS * 2) {
+            rateLimitStore.delete(key);
+        }
+    }
+}, 300000);
+
+const apiRateLimit = createRateLimiter(RATE_LIMIT_MAX);
+const authRateLimit = createRateLimiter(RATE_LIMIT_AUTH_MAX);
+
+// SEC-2: CORS allowlist configuration
+const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+const CORS_ALLOW_ALL = process.env.NODE_ENV === 'development' && CORS_ALLOWED_ORIGINS.length === 0;
+
+if (CORS_ALLOW_ALL) {
+    console.warn('[SECURITY WARNING] CORS allows all origins in development. Set CORS_ALLOWED_ORIGINS for production.');
+}
 
 /**
  * Registers all API routes on the provided router.
  * @param {express.Router} router
  */
 function registerRoutes(router) {
-    // Add CORS headers for all routes to handle browser preflight requests
+    // SEC-2: CORS with allowlist (production) or open (development only)
     router.use((req, res, next) => {
-        res.header('Access-Control-Allow-Origin', '*');
+        const origin = req.get('Origin');
+
+        // Check if origin is allowed
+        let allowOrigin = null;
+        if (CORS_ALLOW_ALL) {
+            allowOrigin = '*';
+        } else if (origin && CORS_ALLOWED_ORIGINS.includes(origin)) {
+            allowOrigin = origin;
+        } else if (!origin) {
+            // No Origin header = same-origin request or non-browser client
+            allowOrigin = null; // Don't set CORS headers for same-origin
+        }
+
+        if (allowOrigin) {
+            res.header('Access-Control-Allow-Origin', allowOrigin);
+            res.header('Access-Control-Allow-Credentials', 'true');
+        }
         res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-        
+
         // Handle preflight requests
         if (req.method === 'OPTIONS') {
+            if (!allowOrigin && origin) {
+                // Origin not in allowlist - deny preflight
+                MonitoringService.warn('CORS preflight denied', {
+                    origin,
+                    path: req.path,
+                    timestamp: new Date().toISOString()
+                }, 'security');
+                return res.status(403).json({ error: 'CORS_ORIGIN_NOT_ALLOWED' });
+            }
             return res.status(200).end();
         }
         next();
@@ -250,28 +335,39 @@ function registerRoutes(router) {
             // Map scopes to tool capabilities
             // Note: 'search' is the unified search tool - available with any read permission
             const scopeToTools = {
-                'Mail.Read': ['getInbox', 'search', 'getEmailDetails', 'getMailAttachments'],
-                'Mail.ReadWrite': ['getInbox', 'search', 'getEmailDetails', 'getMailAttachments', 'markAsRead', 'flagEmail'],
-                'Mail.Send': ['sendEmail'],
-                'Calendars.Read': ['getEvents', 'getAvailability', 'search'],
-                'Calendars.ReadWrite': ['getEvents', 'getAvailability', 'search', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'declineEvent', 'findMeetingTimes'],
-                'Files.Read': ['listFiles', 'search', 'downloadFile', 'getFileMetadata'],
-                'Files.ReadWrite': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'uploadFile', 'createSharingLink'],
-                'People.Read': ['findPeople', 'getRelevantPeople', 'search'],
+                // Mail tools
+                'Mail.Read': ['getInbox', 'readMail', 'readMailDetails', 'search', 'getEmailDetails', 'getMailAttachments'],
+                'Mail.ReadWrite': ['getInbox', 'readMail', 'readMailDetails', 'search', 'getEmailDetails', 'getMailAttachments', 'markAsRead', 'markEmailRead', 'flagMail', 'flagEmail', 'addMailAttachment', 'removeMailAttachment'],
+                'Mail.Send': ['sendEmail', 'sendMail'],
+                // Calendar tools
+                'Calendars.Read': ['getEvents', 'getAvailability', 'getCalendars', 'getRooms', 'search'],
+                'Calendars.ReadWrite': ['getEvents', 'getAvailability', 'getCalendars', 'getRooms', 'search', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'findMeetingTimes', 'addAttachment', 'removeAttachment'],
+                // Files tools
+                'Files.Read': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks'],
+                'Files.ReadWrite': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks', 'uploadFile', 'createSharingLink', 'setFileContent', 'updateFileContent', 'removeSharingPermission'],
+                // People tools
+                'People.Read': ['findPeople', 'getRelevantPeople', 'getPersonById', 'search'],
+                // Teams/Chat tools
                 'Chat.Read': ['listChats', 'getChatMessages', 'search'],
                 'Chat.ReadWrite': ['listChats', 'getChatMessages', 'sendChatMessage', 'search'],
-                'OnlineMeetings.Read': ['listOnlineMeetings', 'getOnlineMeeting'],
-                'OnlineMeetings.ReadWrite': ['listOnlineMeetings', 'getOnlineMeeting', 'createOnlineMeeting'],
+                'OnlineMeetings.Read': ['listOnlineMeetings', 'getOnlineMeeting', 'getMeetingByJoinUrl'],
+                'OnlineMeetings.ReadWrite': ['listOnlineMeetings', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'createOnlineMeeting'],
                 'OnlineMeetingTranscript.Read.All': ['getMeetingTranscripts', 'getMeetingTranscriptContent'],
                 'Team.ReadBasic.All': ['listJoinedTeams'],
                 'Channel.ReadBasic.All': ['listTeamChannels', 'getChannelMessages'],
-                'ChannelMessage.Send': ['sendChannelMessage'],
+                'ChannelMessage.Send': ['sendChannelMessage', 'replyToMessage'],
+                // Tasks tools
                 'Tasks.Read': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask'],
                 'Tasks.ReadWrite': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'createTask', 'updateTask', 'deleteTask', 'completeTask'],
+                // Contacts tools
                 'Contacts.Read': ['listContacts', 'getContact', 'searchContacts'],
                 'Contacts.ReadWrite': ['listContacts', 'getContact', 'searchContacts', 'createContact', 'updateContact', 'deleteContact'],
+                // Groups tools
                 'Group.Read.All': ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'],
-                'User.Read': ['getProfile']
+                // User tools
+                'User.Read': ['getProfile'],
+                // Query tool (available with any permission)
+                'User.ReadBasic.All': ['query']
             };
 
             // Build available tools from scopes
@@ -546,33 +642,33 @@ function registerRoutes(router) {
             });
         }
     }); // /v1/logs/calendar
-    // TODO: Apply rate limiting
-    logRouter.post('/clear', placeholderRateLimit, logController.clearLogEntries); // /v1/logs/clear
+    // SEC-3: Apply rate limiting
+    logRouter.post('/clear', apiRateLimit, logController.clearLogEntries); // /v1/logs/clear
     // RESTful DELETE endpoint for clearing logs
-    logRouter.delete('/', placeholderRateLimit, logController.clearLogEntries); // /v1/logs
+    logRouter.delete('/', apiRateLimit, logController.clearLogEntries); // /v1/logs
     v1.use('/logs', logRouter); // Mounted at /v1/logs
 
     // --- Auth Router ---
     const authRouter = express.Router();
     authRouter.use(controllerLogger());
-    
-    // Web-based authentication endpoints
-    authRouter.get('/status', authController.getAuthStatus);
-    authRouter.get('/login', authController.login);
-    authRouter.get('/callback', authController.handleCallback);
-    authRouter.post('/logout', authController.logout);
-    
-    // Device authentication endpoints (don't require authentication as they're part of the auth flow)
-    authRouter.post('/device/register', deviceAuthController.registerDevice);
-    authRouter.post('/device/authorize', deviceAuthController.authorizeDevice);
-    authRouter.post('/device/token', deviceAuthController.pollForToken);
-    authRouter.post('/device/refresh', deviceAuthController.refreshToken);
-    
-    // MCP token generation endpoint - requires authentication
-    authRouter.post('/generate-mcp-token', requireAuth, deviceAuthController.generateMcpToken);
 
-    // External token login endpoint - NO AUTH REQUIRED (this IS the login)
-    authRouter.post('/external-token/login', externalTokenController.loginWithToken);
+    // Web-based authentication endpoints
+    authRouter.get('/status', apiRateLimit, authController.getAuthStatus);
+    authRouter.get('/login', authRateLimit, authController.login);
+    authRouter.get('/callback', authRateLimit, authController.handleCallback);
+    authRouter.post('/logout', apiRateLimit, authController.logout);
+
+    // Device authentication endpoints - SEC-3: Rate limited to prevent brute-force
+    authRouter.post('/device/register', authRateLimit, deviceAuthController.registerDevice);
+    authRouter.post('/device/authorize', authRateLimit, deviceAuthController.authorizeDevice);
+    authRouter.post('/device/token', authRateLimit, deviceAuthController.pollForToken);
+    authRouter.post('/device/refresh', authRateLimit, deviceAuthController.refreshToken);
+
+    // MCP token generation endpoint - requires authentication
+    authRouter.post('/generate-mcp-token', authRateLimit, requireAuth, deviceAuthController.generateMcpToken);
+
+    // External token login endpoint - SEC-3: Rate limited to prevent brute-force
+    authRouter.post('/external-token/login', authRateLimit, externalTokenController.loginWithToken);
 
     // External token management endpoints - requires authentication
     authRouter.post('/external-token', requireAuth, externalTokenController.inject);
@@ -616,12 +712,37 @@ function registerRoutes(router) {
     // --- MCP Transport Router (SSE transport for direct Claude Desktop connection) ---
     const mcpRouter = express.Router();
     mcpRouter.use(controllerLogger());
+    mcpRouter.use(apiRateLimit);
 
-    // Middleware to extract token from query parameter (for SSE connections)
-    // This allows: /api/mcp/sse?token=xxx
+    // SEC-4: Token in query parameter for SSE connections
+    // SECURITY NOTE: Browser's EventSource API doesn't support Authorization headers,
+    // so SSE connections must pass tokens via query params. This is a known security trade-off:
+    // - Tokens may appear in server logs and browser history
+    // - Only allowed for /sse endpoints, logged for audit trail
+    // - Use short-lived tokens and HTTPS in production
     mcpRouter.use((req, res, next) => {
         if (req.query.token && !req.headers.authorization) {
-            req.headers.authorization = `Bearer ${req.query.token}`;
+            // Only allow for SSE endpoints
+            if (req.path === '/sse' || req.path.startsWith('/sse')) {
+                MonitoringService.info('Token passed via query parameter (SSE)', {
+                    path: req.path,
+                    ip: req.ip || req.connection?.remoteAddress,
+                    userAgent: req.get('User-Agent')?.substring(0, 50),
+                    timestamp: new Date().toISOString()
+                }, 'security');
+                req.headers.authorization = `Bearer ${req.query.token}`;
+            } else {
+                // Reject query param tokens for non-SSE endpoints
+                MonitoringService.warn('Token in query param rejected (non-SSE)', {
+                    path: req.path,
+                    ip: req.ip || req.connection?.remoteAddress,
+                    timestamp: new Date().toISOString()
+                }, 'security');
+                return res.status(400).json({
+                    error: 'INVALID_AUTH_METHOD',
+                    error_description: 'Use Authorization header for this endpoint'
+                });
+            }
         }
         next();
     });

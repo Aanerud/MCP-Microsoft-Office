@@ -522,16 +522,22 @@ class CacheService {
         
         try {
             const initialSize = this._cache.size;
-            
+            const initialTimeouts = this._timeouts.size;
+
             MonitoringService.info('Cache clear operation started', {
                 initialSize,
                 timestamp: new Date().toISOString()
             }, 'cache');
-            
-            for (const key of this._cache.keys()) {
-                await this.invalidate(key, userId, sessionId);
+
+            // PERF-1: Bulk clear instead of N+1 invalidate calls
+            // Clear all timeouts first to prevent orphaned callbacks
+            for (const timeout of this._timeouts.values()) {
+                clearTimeout(timeout);
             }
-            
+            this._timeouts.clear();
+            this._cache.clear();
+            this._stats.deletes += initialSize;
+
             const executionTime = Date.now() - startTime;
             
             // Pattern 2: User Activity Logs (successful operations)

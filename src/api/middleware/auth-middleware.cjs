@@ -11,7 +11,16 @@ const jwt = require('jsonwebtoken');
 const msalService = require('../../auth/msal-service.cjs');
 
 // JWT Configuration for API authentication
-const JWT_SECRET = process.env.JWT_SECRET || process.env.STATIC_JWT_SECRET || require('crypto').randomBytes(64).toString('hex');
+// SEC-5: JWT secret must be set via environment variable in production
+const JWT_SECRET_ENV = process.env.JWT_SECRET || process.env.STATIC_JWT_SECRET;
+if (!JWT_SECRET_ENV) {
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error('CRITICAL: JWT_SECRET or STATIC_JWT_SECRET environment variable must be set in production');
+    }
+    // Development-only fallback with warning - generates random secret (tokens invalid after restart)
+    console.warn('[SECURITY WARNING] No JWT_SECRET set - using random secret. Tokens will be invalid after restart.');
+}
+const JWT_SECRET = JWT_SECRET_ENV || require('crypto').randomBytes(64).toString('hex');
 const MCP_BEARER_TOKEN_EXPIRY = process.env.MCP_BEARER_TOKEN_EXPIRY || '24h';
 
 /**

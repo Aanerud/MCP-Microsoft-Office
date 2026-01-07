@@ -4,9 +4,9 @@
  */
 
 const moduleRegistry = require('../modules/module-registry.cjs');
-const MailModule = require('../modules/mail/index.js');
+const MailModule = require('../modules/mail/index.cjs');
 const CalendarModule = require('../modules/calendar/index.cjs');
-const FilesModule = require('../modules/files/index.js');
+const FilesModule = require('../modules/files/index.cjs');
 const PeopleModule = require('../modules/people/index.cjs');
 const SearchModule = require('../modules/search/index.cjs');
 const TeamsModule = require('../modules/teams/index.cjs');

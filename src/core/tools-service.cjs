@@ -1207,34 +1207,6 @@ This endpoint uses Microsoft Graph's calendarView which properly expands recurri
                     limit: { inQuery: true }
                 };
                 break;
-            case 'findPeople':
-                toolDef.description = 'Find people by name or email. Use this to get email addresses for scheduling or sending emails.';
-                toolDef.endpoint = '/api/v1/people/find';
-                toolDef.method = 'GET';
-                toolDef.parameters = {
-                    query: { 
-                        type: 'string', 
-                        description: 'Search query to find a person',
-                        optional: true
-                    },
-                    name: { 
-                        type: 'string', 
-                        description: 'Person name to search for', 
-                        optional: true 
-                    },
-                    limit: { 
-                        type: 'number', 
-                        description: 'Maximum number of results', 
-                        optional: true,
-                        default: 10
-                    }
-                };
-                toolDef.parameterMapping = {
-                    query: { inQuery: true },
-                    name: { inQuery: true },
-                    limit: { inQuery: true }
-                };
-                break;
             case 'getRelevantPeople':
                 toolDef.description = 'Get people relevant to the user';
                 toolDef.endpoint = '/api/v1/people';

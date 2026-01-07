@@ -690,33 +690,57 @@ GraphClient.prototype.batch = async function(requests, retries = 2, userId, sess
     }
     
     try {
-        let pending = requests.map((req, i) => ({ ...req, _idx: i }));
+        // BUG-3: Use unique IDs for batch requests to handle out-of-order responses
+        // Graph API batch responses may not maintain request order
+        let pending = requests.map((req, i) => ({
+            ...req,
+            id: req.id || `req_${i}`,  // Ensure each request has a unique ID
+            _idx: i
+        }));
+
+        // Create a map of ID to original index for O(1) lookup
+        const idToIndex = new Map(pending.map(req => [req.id, req._idx]));
+
         let results = new Array(requests.length);
         let attempts = 0;
-        
+
         while (pending.length && attempts <= retries) {
             const batchStartTime = Date.now();
             const response = await _fetchWithRetry('/$batch', this.token, 'POST', { requests: pending }, {}, 2, userId, sessionId);
             const batchTime = Date.now() - batchStartTime;
-            
+
             MonitoringService.trackMetric('graph_api_batch_request', batchTime, {
                 requestCount: pending.length,
                 attempt: attempts + 1,
                 userId,
                 timestamp: new Date().toISOString()
             });
-            
+
             const retryRequests = [];
             let maxRetryAfter = 0;
             let successCount = 0;
             let throttledCount = 0;
-            
-            (response.responses || []).forEach((r, idx) => {
-                const origIdx = pending[idx]._idx;
+
+            // BUG-3: Match responses by ID instead of array index
+            const pendingById = new Map(pending.map(req => [req.id, req]));
+            (response.responses || []).forEach((r) => {
+                const responseId = r.id;
+                const pendingReq = pendingById.get(responseId);
+
+                if (!pendingReq) {
+                    MonitoringService.warn('Batch response ID not found in pending requests', {
+                        responseId,
+                        pendingIds: Array.from(pendingById.keys()),
+                        timestamp: new Date().toISOString()
+                    }, 'graph');
+                    return;
+                }
+
+                const origIdx = idToIndex.get(responseId);
                 if (r.status === 429) {
                     const retryAfter = Number((r.headers && r.headers['retry-after']) || 1);
                     maxRetryAfter = Math.max(maxRetryAfter, retryAfter);
-                    retryRequests.push(pending[idx]);
+                    retryRequests.push(pendingReq);
                     throttledCount++;
                 } else {
                     results[origIdx] = r.body;

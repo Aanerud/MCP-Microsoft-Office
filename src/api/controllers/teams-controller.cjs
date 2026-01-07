@@ -7,40 +7,7 @@
 const Joi = require('joi');
 const ErrorService = require('../../core/error-service.cjs');
 const MonitoringService = require('../../core/monitoring-service.cjs');
-
-/**
- * Validate request data and log validation results.
- * @param {object} req - Express request
- * @param {object} schema - Joi validation schema
- * @param {string} operation - Operation name for logging
- * @param {object} userContext - User context containing userId and deviceId
- * @returns {object} Validation result
- */
-function validateAndLog(req, schema, operation, userContext = {}) {
-    const { userId = null, deviceId = null } = userContext;
-
-    // For POST requests, validate body; for GET requests, validate query
-    const dataToValidate = req.method === 'POST' ? req.body : req.query;
-
-    const { error, value } = schema.validate(dataToValidate);
-
-    if (error) {
-        MonitoringService.warn(`Validation failed for ${operation}`, {
-            operation,
-            error: error.details[0].message,
-            userId,
-            deviceId
-        }, 'teams', null, userId, deviceId);
-    } else {
-        MonitoringService.debug(`Validation passed for ${operation}`, {
-            operation,
-            userId,
-            deviceId
-        }, 'teams', null, userId, deviceId);
-    }
-
-    return { error, value };
-}
+const { validateAndLog } = require('../middleware/validation-utils.cjs');
 
 /**
  * Joi validation schemas for teams endpoints
