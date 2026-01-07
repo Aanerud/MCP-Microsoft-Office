@@ -624,9 +624,11 @@ async function getEvents(options = {}) {
     }
     
     // Add combined filter to query params
-    if (filterConditions.length > 0) {
+    // IMPORTANT: calendarView endpoint does NOT support $filter the same way as /events
+    // Only apply $filter when using /events endpoint, not /calendarView
+    if (filterConditions.length > 0 && !useCalendarView) {
       const combinedFilter = filterConditions.join(' and ');
-      
+
       // Log the final filter for debugging
       MonitoringService?.debug('Final Graph API filter expression', {
         combinedFilter,
@@ -640,8 +642,16 @@ async function getEvents(options = {}) {
         },
         timestamp: new Date().toISOString()
       }, 'calendar');
-      
+
       queryParams.push(`$filter=${encodeURIComponent(combinedFilter)}`);
+    } else if (filterConditions.length > 0 && useCalendarView) {
+      // Log that filters are skipped for calendarView (they don't work the same way)
+      MonitoringService?.info('Filters not applied to calendarView endpoint', {
+        note: 'calendarView does not support $filter like /events endpoint',
+        skippedFilters: filterConditions.length,
+        recommendation: 'Results include all events in date range; filter client-side if needed',
+        timestamp: new Date().toISOString()
+      }, 'calendar');
     }
     
     // Add select parameter
