@@ -438,80 +438,56 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
             // Calendar tools
             case 'getEvents':
             case 'getCalendar':
-                toolDef.description = 'Fetch calendar events from Microsoft 365. IMPORTANT: To see recurring meeting instances, you MUST provide BOTH start AND end date parameters. Without date range, only non-recurring events and recurring series (not instances) are returned. Always specify date range for queries like "today", "this week", etc.';
+                toolDef.description = 'Fetch calendar events. Use start and end dates to see recurring meeting instances.';
                 toolDef.endpoint = '/api/v1/calendar';
                 toolDef.parameters = {
-                    // Date range parameters
                     start: {
                         type: 'string',
-                        description: 'Start date in ISO format (YYYY-MM-DD). REQUIRED for recurring events - use with end date to see recurring meeting instances.',
+                        description: 'Start date (YYYY-MM-DD)',
                         optional: true,
                         format: 'date'
                     },
                     end: {
                         type: 'string',
-                        description: 'End date in ISO format (YYYY-MM-DD). REQUIRED for recurring events - use with start date to see recurring meeting instances.',
+                        description: 'End date (YYYY-MM-DD)',
                         optional: true,
                         format: 'date'
                     },
-                    
-                    // Pagination and limits
-                    limit: { 
-                        type: 'number', 
-                        description: 'Maximum number of events to return (1-999)', 
-                        optional: true, 
-                        default: 50,
-                        minimum: 1,
-                        maximum: 999
+                    limit: {
+                        type: 'number',
+                        description: 'Max events to return',
+                        optional: true,
+                        default: 50
                     },
-                    top: { 
-                        type: 'number', 
-                        description: 'Alias for limit - maximum number of events to return', 
+                    filter: {
+                        type: 'string',
+                        description: 'OData $filter query',
                         optional: true
                     },
-                    
-                    // Microsoft Graph query parameters
-                    filter: { 
-                        type: 'string', 
-                        description: 'OData $filter query - WARNING: Microsoft Graph has severe limitations. Many expressions cause HTTP 501 errors. AVOID organizer/emailAddress filters. Use simple expressions only like "contains(subject,\'text\')" or "start/dateTime ge \'2025-01-01T00:00:00Z\'"', 
+                    select: {
+                        type: 'string',
+                        description: 'Properties to include (comma-separated)',
                         optional: true
                     },
-                    select: { 
-                        type: 'string', 
-                        description: 'Comma-separated list of properties to include in response (e.g., "subject,start,end,organizer")', 
-                        optional: true
-                    },
-                    orderby: { 
-                        type: 'string', 
-                        description: 'Property to sort results by (e.g., "start/dateTime desc", "subject asc")', 
-                        optional: true, 
+                    orderby: {
+                        type: 'string',
+                        description: 'Sort by property',
+                        optional: true,
                         default: 'start/dateTime'
                     },
-                    expand: { 
-                        type: 'string', 
-                        description: 'Comma-separated list of related properties to expand (e.g., "attendees,calendar")', 
+                    subject: {
+                        type: 'string',
+                        description: 'Filter by subject text',
                         optional: true
                     },
-                    
-                    // Convenience filters (converted to $filter queries) - RECOMMENDED APPROACH
-                    subject: { 
-                        type: 'string', 
-                        description: 'Filter events by subject containing this text (SAFE - uses contains() filter)', 
+                    organizer: {
+                        type: 'string',
+                        description: 'Filter by organizer name',
                         optional: true
                     },
-                    organizer: { 
-                        type: 'string', 
-                        description: 'Filter events by organizer display name (e.g., "John Doe"). NOTE: Email addresses are NOT supported - use the person\'s display name instead. Microsoft Graph API supports organizer/emailAddress/name but not organizer/emailAddress/address filtering.', 
-                        optional: true
-                    },
-                    attendee: { 
-                        type: 'string', 
-                        description: 'Filter events where this email address is an attendee (RISKY - uses lambda expressions that may fail)', 
-                        optional: true
-                    },
-                    location: { 
-                        type: 'string', 
-                        description: 'Filter events by location containing this text (SAFE - uses contains() filter)', 
+                    location: {
+                        type: 'string',
+                        description: 'Filter by location text',
                         optional: true
                     },
                     
@@ -1152,7 +1128,7 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
 
             // People tools
             case 'findPeople':
-                toolDef.description = 'IMPORTANT: Find and resolve people by name or email before scheduling meetings or sending emails. This tool MUST be used to resolve any person references before creating calendar events or sending mail.';
+                toolDef.description = 'Find people by name or email. Use this to get email addresses for scheduling or sending emails.';
                 toolDef.endpoint = '/api/v1/people/find';
                 toolDef.method = 'GET';
                 toolDef.parameters = {
@@ -1180,7 +1156,7 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
                 };
                 break;
             case 'findPeople':
-                toolDef.description = 'IMPORTANT: Find and resolve people by name or email before scheduling meetings or sending emails. This tool MUST be used to resolve any person references before creating calendar events or sending mail.';
+                toolDef.description = 'Find people by name or email. Use this to get email addresses for scheduling or sending emails.';
                 toolDef.endpoint = '/api/v1/people/find';
                 toolDef.method = 'GET';
                 toolDef.parameters = {
@@ -2448,7 +2424,7 @@ For recurring calendar events or availability checks, use getCalendar instead.`;
             if (peopleModule) {
                 const findPeopleTool = {
                     name: 'findPeople',
-                    description: 'IMPORTANT: Find and resolve people by name or email before scheduling meetings or sending emails. This tool MUST be used to resolve any person references before creating calendar events or sending mail.',
+                    description: 'Find people by name or email. Use this to get email addresses for scheduling or sending emails.',
                     endpoint: '/api/v1/people/find',
                     method: 'GET',
                     parameters: {

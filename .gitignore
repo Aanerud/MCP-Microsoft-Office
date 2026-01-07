@@ -23,6 +23,7 @@ coverage-final.json
 lcov.info
 jest.config.*
 jest.setup.*
+token.txt
 
 # Environment variables
 .env
@@ -47,6 +48,7 @@ backups/
 # Token files (contain secrets)
 token.txt
 *.token
+*-bearer-token.txt
 
 # Runtime data
 pids/

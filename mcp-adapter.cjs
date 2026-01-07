@@ -117,7 +117,7 @@ const stubModuleRegistry = {
         { id: 'calendar', name: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
         { id: 'files', name: 'files', capabilities: ['listFiles', 'searchFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
         { id: 'people', name: 'people', capabilities: ['find', 'search', 'getRelevantPeople', 'getPersonById'] },
-        { id: 'teams', name: 'teams', capabilities: ['listChats', 'getChat', 'listChatMessages', 'sendChatMessage', 'listChannels', 'getChannel', 'listChannelMessages', 'sendChannelMessage', 'listTeams', 'getTeam', 'createOnlineMeeting', 'getOnlineMeeting'] },
+        { id: 'teams', name: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings'] },
         { id: 'search', name: 'search', capabilities: ['search'] },
         { id: 'todo', name: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
         { id: 'contacts', name: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
@@ -129,7 +129,7 @@ const stubModuleRegistry = {
             'calendar': { id: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
             'files': { id: 'files', capabilities: ['listFiles', 'searchFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
             'people': { id: 'people', capabilities: ['find', 'search', 'getRelevantPeople', 'getPersonById'] },
-            'teams': { id: 'teams', capabilities: ['listChats', 'getChat', 'listChatMessages', 'sendChatMessage', 'listChannels', 'getChannel', 'listChannelMessages', 'sendChannelMessage', 'listTeams', 'getTeam', 'createOnlineMeeting', 'getOnlineMeeting'] },
+            'teams': { id: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings'] },
             'search': { id: 'search', capabilities: ['search'] },
             'todo': { id: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
             'contacts': { id: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
@@ -1770,8 +1770,17 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                 apiMethod = 'DELETE';
                 break;
             case 'todo.listTasks':
+                // If no listId provided, get the default task list first
                 if (!params.listId) {
-                    throw new Error('List ID is required for listTasks');
+                    const listsResult = await callApi('GET', '/v1/todo/lists');
+                    const lists = listsResult?.data || listsResult?.taskLists || [];
+                    if (lists.length > 0) {
+                        // Find default list or use first one
+                        const defaultList = lists.find(l => l.wellknownListName === 'defaultList') || lists[0];
+                        params.listId = defaultList.id;
+                    } else {
+                        throw new Error('No task lists found. Create a task list first.');
+                    }
                 }
                 apiPath = `/v1/todo/lists/${params.listId}/tasks`;
                 apiMethod = 'GET';
@@ -1784,8 +1793,16 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                 apiMethod = 'GET';
                 break;
             case 'todo.createTask':
+                // If no listId provided, get the default task list first
                 if (!params.listId) {
-                    throw new Error('List ID is required for createTask');
+                    const listsResult = await callApi('GET', '/v1/todo/lists');
+                    const lists = listsResult?.data || listsResult?.taskLists || [];
+                    if (lists.length > 0) {
+                        const defaultList = lists.find(l => l.wellknownListName === 'defaultList') || lists[0];
+                        params.listId = defaultList.id;
+                    } else {
+                        throw new Error('No task lists found. Create a task list first.');
+                    }
                 }
                 apiPath = `/v1/todo/lists/${params.listId}/tasks`;
                 apiMethod = 'POST';
