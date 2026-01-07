@@ -418,19 +418,19 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
             // Calendar tools
             case 'getEvents':
             case 'getCalendar':
-                toolDef.description = 'Fetch calendar events from Microsoft 365. IMPORTANT: Microsoft Graph has strict filter limitations - organizer email filtering often fails with HTTP 501 errors. Use convenience parameters (subject, organizer, attendee) instead of complex $filter expressions.';
+                toolDef.description = 'Fetch calendar events from Microsoft 365. IMPORTANT: To see recurring meeting instances, you MUST provide BOTH start AND end date parameters. Without date range, only non-recurring events and recurring series (not instances) are returned. Always specify date range for queries like "today", "this week", etc.';
                 toolDef.endpoint = '/api/v1/calendar';
                 toolDef.parameters = {
                     // Date range parameters
-                    start: { 
-                        type: 'string', 
-                        description: 'Start date in ISO format (YYYY-MM-DD) to filter events from', 
+                    start: {
+                        type: 'string',
+                        description: 'Start date in ISO format (YYYY-MM-DD). REQUIRED for recurring events - use with end date to see recurring meeting instances.',
                         optional: true,
                         format: 'date'
                     },
-                    end: { 
-                        type: 'string', 
-                        description: 'End date in ISO format (YYYY-MM-DD) to filter events until', 
+                    end: {
+                        type: 'string',
+                        description: 'End date in ISO format (YYYY-MM-DD). REQUIRED for recurring events - use with start date to see recurring meeting instances.',
                         optional: true,
                         format: 'date'
                     },

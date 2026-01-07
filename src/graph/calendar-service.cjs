@@ -509,16 +509,32 @@ async function getEvents(options = {}) {
     
     // Build query parameters array
     let queryParams = [];
-    
+
     // Build filter conditions
     let filterConditions = [];
-    
-    // Add date range filter
-    if (effectiveStart && effectiveEnd) {
-      filterConditions.push(`start/dateTime ge '${effectiveStart}T00:00:00.000Z' and end/dateTime le '${effectiveEnd}T23:59:59.999Z'`);
+
+    // Determine if we should use calendarView (for recurring events) or events endpoint
+    // calendarView is REQUIRED to see recurring event instances - /events only shows the series master
+    // Use calendarView when both start and end dates are provided
+    const useCalendarView = effectiveStart && effectiveEnd;
+
+    // For calendarView, dates go in query params (startDateTime, endDateTime)
+    // For events endpoint, dates go in $filter
+    if (useCalendarView) {
+      // calendarView requires ISO 8601 format with timezone
+      queryParams.push(`startDateTime=${effectiveStart}T00:00:00.000Z`);
+      queryParams.push(`endDateTime=${effectiveEnd}T23:59:59.999Z`);
+
+      MonitoringService?.debug('Using calendarView endpoint for recurring events support', {
+        startDateTime: `${effectiveStart}T00:00:00.000Z`,
+        endDateTime: `${effectiveEnd}T23:59:59.999Z`,
+        timestamp: new Date().toISOString()
+      }, 'calendar');
     } else if (effectiveStart) {
+      // Only start date - use events with filter
       filterConditions.push(`start/dateTime ge '${effectiveStart}T00:00:00.000Z'`);
     } else if (effectiveEnd) {
+      // Only end date - use events with filter
       filterConditions.push(`end/dateTime le '${effectiveEnd}T23:59:59.999Z'`);
     }
     
@@ -644,11 +660,13 @@ async function getEvents(options = {}) {
     
     // Combine query parameters
     const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
-    
-    // Make API request using our helper function
-    endpoint = getEndpointPath(userId, `/events${queryString}`);
-    MonitoringService?.debug(`Fetching calendar events with $filter (no $search support)`, {
+
+    // Choose endpoint: calendarView for date ranges (includes recurring instances), events otherwise
+    const endpointPath = useCalendarView ? '/calendarView' : '/events';
+    endpoint = getEndpointPath(userId, `${endpointPath}${queryString}`);
+    MonitoringService?.debug(`Fetching calendar events via ${useCalendarView ? 'calendarView (recurring instances included)' : 'events'}`, {
       endpoint,
+      useCalendarView,
       userId: redactSensitiveData({ userId }),
       filters: {
         dateRange: { start: effectiveStart, end: effectiveEnd },
