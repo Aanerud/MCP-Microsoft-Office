@@ -1231,6 +1231,97 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
                 };
                 break;
 
+            // Search tools
+            case 'search':
+                toolDef.description = `Unified search across Microsoft 365: emails, calendar events, files, and people.
+
+KQL QUERY SYNTAX (translate user requests to these patterns):
+- Simple search: "project budget" (searches all fields)
+- From specific person: "from:john@company.com"
+- Subject contains: "subject:quarterly report"
+- Has attachments: "hasAttachments:true"
+- Date range: "received>=2024-01-01 AND received<=2024-01-31"
+- Combine: "from:boss@company.com AND subject:urgent"
+- File type: "filetype:pdf"
+- In folder: "path:Documents/Projects"
+
+ENTITY TYPES:
+- message: emails (supports from:, to:, subject:, body:, hasAttachments:)
+- event: calendar events (supports subject:, organizer:, location:)
+- driveItem: files (supports filename:, filetype:, path:, author:)
+- person: people (searches displayName and email)
+
+For recurring calendar events or availability checks, use getCalendar instead.`;
+                toolDef.endpoint = '/api/v1/search';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    query: {
+                        type: 'string',
+                        description: 'KQL query string. Translate natural language to KQL syntax above.',
+                        required: true
+                    },
+                    entityTypes: {
+                        type: 'array',
+                        description: 'Entity types to search: message, event, driveItem, person. Default: all types.',
+                        items: { enum: ['message', 'event', 'driveItem', 'person'] },
+                        optional: true,
+                        default: ['message', 'event', 'driveItem', 'person']
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Results per entity type (max 25)',
+                        optional: true,
+                        default: 10
+                    },
+                    from: {
+                        type: 'number',
+                        description: 'Pagination offset for results',
+                        optional: true,
+                        default: 0
+                    }
+                };
+                break;
+            case 'searchMessages':
+                toolDef.description = 'Search emails only. Use KQL syntax: from:, to:, subject:, body:, hasAttachments:, received>=date';
+                toolDef.endpoint = '/api/v1/search';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    query: { type: 'string', description: 'KQL query for emails', required: true },
+                    entityTypes: { type: 'array', description: 'Fixed to message', optional: true, default: ['message'], hidden: true },
+                    limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
+                };
+                break;
+            case 'searchEvents':
+                toolDef.description = 'Search calendar events only. Use KQL syntax: subject:, organizer:, location:. For recurring events, use getCalendar with date range.';
+                toolDef.endpoint = '/api/v1/search';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    query: { type: 'string', description: 'KQL query for events', required: true },
+                    entityTypes: { type: 'array', description: 'Fixed to event', optional: true, default: ['event'], hidden: true },
+                    limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
+                };
+                break;
+            case 'searchFiles':
+                toolDef.description = 'Search files only. Use KQL syntax: filename:, filetype:pdf, path:, author:, created>=date';
+                toolDef.endpoint = '/api/v1/search';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    query: { type: 'string', description: 'KQL query for files', required: true },
+                    entityTypes: { type: 'array', description: 'Fixed to driveItem', optional: true, default: ['driveItem'], hidden: true },
+                    limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
+                };
+                break;
+            case 'searchPeople':
+                toolDef.description = 'Search people in the organization. Searches displayName and email.';
+                toolDef.endpoint = '/api/v1/search';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    query: { type: 'string', description: 'Search query for people', required: true },
+                    entityTypes: { type: 'array', description: 'Fixed to person', optional: true, default: ['person'], hidden: true },
+                    limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
+                };
+                break;
+
             // Default for unknown capabilities
             default:
                 MonitoringService.warn(`No specific definition found for capability '${capability}' in module '${moduleName}'. Using defaults.`, {

@@ -9,6 +9,7 @@ const mailControllerFactory = require('./controllers/mail-controller.js');
 const calendarControllerFactory = require('./controllers/calendar-controller.js');
 const filesControllerFactory = require('./controllers/files-controller.js');
 const peopleControllerFactory = require('./controllers/people-controller.cjs');
+const searchControllerFactory = require('./controllers/search-controller.cjs');
 const logController = require('./controllers/log-controller.cjs');
 const authController = require('./controllers/auth-controller.cjs');
 const deviceAuthController = require('./controllers/device-auth-controller.cjs');
@@ -218,6 +219,7 @@ function registerRoutes(router) {
     const calendarController = calendarControllerFactory({ calendarModule: apiContext.calendarModule });
     const filesController = filesControllerFactory({ filesModule: apiContext.filesModule });
     const peopleController = peopleControllerFactory({ peopleModule: apiContext.peopleModule });
+    const searchController = searchControllerFactory({ searchModule: apiContext.searchModule });
     const queryController = queryControllerFactory({
         nluAgent: apiContext.nluAgent,
         contextService: apiContext.contextService,
@@ -302,7 +304,7 @@ function registerRoutes(router) {
     filesRouter.post('/sharing/remove', placeholderRateLimit, filesController.removeSharingPermission);
     v1.use('/files', filesRouter);
 
-    // --- People Router --- 
+    // --- People Router ---
     const peopleRouter = express.Router();
     // Apply controller logger middleware
     peopleRouter.use(controllerLogger());
@@ -310,6 +312,16 @@ function registerRoutes(router) {
     peopleRouter.get('/find', peopleController.findPeople);
     peopleRouter.get('/:id', peopleController.getPersonById); // /v1/people/:id
     v1.use('/people', peopleRouter);
+
+    // --- Search Router ---
+    const searchRouter = express.Router();
+    // Apply controller logger middleware
+    searchRouter.use(controllerLogger());
+    // Unified search supports both GET and POST
+    searchRouter.get('/', searchController.search); // /v1/search?query=...
+    // TODO: Apply rate limiting
+    searchRouter.post('/', placeholderRateLimit, searchController.search); // /v1/search
+    v1.use('/search', searchRouter);
 
     // --- Log Router --- (No Auth required for logs)
     const logRouter = express.Router();
