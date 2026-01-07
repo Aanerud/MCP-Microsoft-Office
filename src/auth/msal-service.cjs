@@ -1384,7 +1384,41 @@ async function getMostRecentToken(userId) {
             }, 'auth');
         }
         
-        // First try to get token from user sessions
+        // FIRST: Check for external enterprise token (injected via UI)
+        // External tokens are the actual Microsoft Graph tokens that can be used directly
+        if (userId) {
+            try {
+                const extController = getExternalTokenController();
+                const externalToken = await extController.getActiveExternalToken(userId);
+                if (externalToken) {
+                    if (process.env.NODE_ENV === 'development') {
+                        MonitoringService.debug('Found valid external enterprise token', {
+                            userId: userId.substring(0, 8) + '...',
+                            timestamp: new Date().toISOString()
+                        }, 'auth');
+                    }
+
+                    MonitoringService.info('Most recent token retrieved from external source', {
+                        operation: 'getMostRecentToken',
+                        source: 'external_token',
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'auth', null, userId);
+
+                    return externalToken;
+                }
+            } catch (extError) {
+                // External token check failed - continue with normal flow
+                if (process.env.NODE_ENV === 'development') {
+                    MonitoringService.debug('External token check failed, continuing', {
+                        error: extError.message,
+                        timestamp: new Date().toISOString()
+                    }, 'auth');
+                }
+            }
+        }
+
+        // Try to get token from user sessions (in-memory cache)
         if (userId) {
             const userSession = getUserSession(userId);
             if (userSession?.msUser?.accessToken) {
@@ -1394,7 +1428,7 @@ async function getMostRecentToken(userId) {
                         timestamp: new Date().toISOString()
                     }, 'auth');
                 }
-                
+
                 // Pattern 2: User Activity Logs
                 MonitoringService.info('Most recent token retrieved from user session', {
                     operation: 'getMostRecentToken',
@@ -1402,11 +1436,11 @@ async function getMostRecentToken(userId) {
                     duration: Date.now() - startTime,
                     timestamp: new Date().toISOString()
                 }, 'auth', null, userId);
-                
+
                 return userSession.msUser.accessToken;
             }
         }
-        
+
         // If userId not provided or no session found, try any available user session
         for (const [sessionUserId, userSession] of userSessions.entries()) {
             if (userSession.msUser?.accessToken) {
