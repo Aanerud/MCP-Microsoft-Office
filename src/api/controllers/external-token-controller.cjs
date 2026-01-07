@@ -476,27 +476,74 @@ async function loginWithToken(req, res) {
  */
 async function getActiveExternalToken(userId) {
   try {
+    // Debug: Log the lookup attempt
+    MonitoringService.info('Looking up external token', {
+      userId,
+      timestamp: new Date().toISOString()
+    }, 'auth', null, userId);
+
     // Check token source
     const sourceKey = getStorageKey(userId, STORAGE_KEYS.SOURCE);
+    MonitoringService.info('Checking token source', {
+      sourceKey,
+      userId,
+      timestamp: new Date().toISOString()
+    }, 'auth', null, userId);
+
     const tokenSource = await StorageService.getSecureSetting(sourceKey, userId);
 
+    MonitoringService.info('Token source retrieved', {
+      sourceKey,
+      tokenSource: tokenSource || 'NOT_FOUND',
+      isExternal: tokenSource === 'external',
+      userId,
+      timestamp: new Date().toISOString()
+    }, 'auth', null, userId);
+
     if (tokenSource !== 'external') {
+      MonitoringService.info('Token source is not external, returning null', {
+        tokenSource: tokenSource || 'NOT_FOUND',
+        userId,
+        timestamp: new Date().toISOString()
+      }, 'auth', null, userId);
       return null;
     }
 
     // Get token
     const tokenKey = getStorageKey(userId, STORAGE_KEYS.TOKEN);
+    MonitoringService.info('Retrieving external token', {
+      tokenKey,
+      userId,
+      timestamp: new Date().toISOString()
+    }, 'auth', null, userId);
+
     const storedToken = await StorageService.getSecureSetting(tokenKey, userId);
 
     if (!storedToken) {
+      MonitoringService.warn('External token not found in storage', {
+        tokenKey,
+        userId,
+        timestamp: new Date().toISOString()
+      }, 'auth', null, userId);
       return null;
     }
 
     // Validate token is still valid
     const validation = ExternalTokenValidator.quickValidate(storedToken);
     if (!validation.valid) {
+      MonitoringService.warn('External token validation failed', {
+        error: validation.error,
+        userId,
+        timestamp: new Date().toISOString()
+      }, 'auth', null, userId);
       return null;
     }
+
+    MonitoringService.info('External token retrieved successfully', {
+      tokenLength: storedToken.length,
+      userId,
+      timestamp: new Date().toISOString()
+    }, 'auth', null, userId);
 
     return storedToken;
 
@@ -504,8 +551,9 @@ async function getActiveExternalToken(userId) {
     MonitoringService.error('Get active external token error', {
       userId,
       error: error.message,
+      stack: error.stack,
       timestamp: new Date().toISOString()
-    }, 'auth');
+    }, 'auth', null, userId);
     return null;
   }
 }
