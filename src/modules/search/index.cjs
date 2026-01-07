@@ -8,11 +8,7 @@ const ErrorService = require('../../core/error-service.cjs');
 const MonitoringService = require('../../core/monitoring-service.cjs');
 
 const SEARCH_CAPABILITIES = [
-  'search',
-  'searchMessages',
-  'searchEvents',
-  'searchFiles',
-  'searchPeople'
+  'search'
 ];
 
 // Log module initialization

@@ -220,27 +220,35 @@ async function search(options = {}, req, userId, sessionId) {
       timestamp: new Date().toISOString()
     }, 'search');
 
-    // Execute search
-    const response = await client.api('/search/query').post({ requests });
+    // Execute SEPARATE API calls for each request (Microsoft Graph doesn't allow
+    // combining incompatible entity types even in separate request objects)
+    // Use Promise.all for parallel execution
+    const apiCalls = requests.map(request =>
+      client.api('/search/query').version('beta').post({ requests: [request] })
+    );
 
-    // Process results
+    const responses = await Promise.all(apiCalls);
+
+    // Process results from all responses
     const allResults = [];
     let totalHits = 0;
     let moreResultsAvailable = false;
 
-    if (response.value && Array.isArray(response.value)) {
-      for (const searchResponse of response.value) {
-        if (searchResponse.hitsContainers && Array.isArray(searchResponse.hitsContainers)) {
-          for (const container of searchResponse.hitsContainers) {
-            totalHits += container.total || 0;
-            moreResultsAvailable = moreResultsAvailable || container.moreResultsAvailable;
+    for (const response of responses) {
+      if (response.value && Array.isArray(response.value)) {
+        for (const searchResponse of response.value) {
+          if (searchResponse.hitsContainers && Array.isArray(searchResponse.hitsContainers)) {
+            for (const container of searchResponse.hitsContainers) {
+              totalHits += container.total || 0;
+              moreResultsAvailable = moreResultsAvailable || container.moreResultsAvailable;
 
-            if (container.hits && Array.isArray(container.hits)) {
-              for (const hit of container.hits) {
-                // Determine entity type from the resource
-                const resourceType = hit.resource?.['@odata.type']?.replace('#microsoft.graph.', '') || 'unknown';
-                const normalizedHit = normalizeSearchHit(hit, resourceType);
-                allResults.push(normalizedHit);
+              if (container.hits && Array.isArray(container.hits)) {
+                for (const hit of container.hits) {
+                  // Determine entity type from the resource
+                  const resourceType = hit.resource?.['@odata.type']?.replace('#microsoft.graph.', '') || 'unknown';
+                  const normalizedHit = normalizeSearchHit(hit, resourceType);
+                  allResults.push(normalizedHit);
+                }
               }
             }
           }

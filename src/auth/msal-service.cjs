@@ -825,10 +825,14 @@ async function getAccessToken(req) {
             // Device auth flow - use userId from JWT token
             userId = req.user.userId;
             sessionId = req.user.sessionId || req.user.userId; // Use userId as sessionId if not provided
-        } else if (req.session?.id) {
-            // Session-based auth flow - use session ID
+        } else if (req.session?.id && req.session?.msUser?.username) {
+            // Session-based auth flow with MS365 user - use Microsoft 365 email as consistent identifier
             sessionId = req.session.id;
-            userId = `user:${sessionId}`;
+            userId = `ms365:${req.session.msUser.username}`;
+        } else if (req.session?.id) {
+            // Session-based auth flow without MS365 user - fallback to session ID
+            sessionId = req.session.id;
+            userId = `session:${sessionId}`;
         } else {
             // Fallback to query parameter
             userId = req.query?.userId;

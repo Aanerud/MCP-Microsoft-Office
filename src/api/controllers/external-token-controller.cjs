@@ -425,6 +425,10 @@ async function loginWithToken(req, res) {
     const tokenKey = getStorageKey(userId, STORAGE_KEYS.TOKEN);
     await StorageService.setSecureSetting(tokenKey, validationResult.token, userId);
 
+    // Also store under ms-access-token for compatibility with isAuthenticated
+    const msAccessTokenKey = `${userId}:ms-access-token`;
+    await StorageService.setSecureSetting(msAccessTokenKey, validationResult.token, userId);
+
     // Store metadata (JSON)
     const metadataKey = getStorageKey(userId, STORAGE_KEYS.METADATA);
     await StorageService.setSecureSetting(

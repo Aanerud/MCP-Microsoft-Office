@@ -259,23 +259,36 @@ class GraphClient {
      */
     api(path, userId, sessionId) {
         const self = this;
-        return {
+        let apiVersion = 'v1.0'; // Default version
+
+        const requestBuilder = {
+            /**
+             * Set the API version (e.g., 'v1.0' or 'beta')
+             * @param {string} ver - API version
+             * @returns {object} - Returns this for chaining
+             */
+            version(ver) {
+                apiVersion = ver;
+                return requestBuilder;
+            },
             async get(options = {}) {
-                return await _fetchWithRetry(path, self.token, 'GET', null, options, 2, userId, sessionId);
+                return await _fetchWithRetry(path, self.token, 'GET', null, options, 2, userId, sessionId, apiVersion);
             },
             async post(body, options = {}) {
-                return await _fetchWithRetry(path, self.token, 'POST', body, options, 2, userId, sessionId);
+                return await _fetchWithRetry(path, self.token, 'POST', body, options, 2, userId, sessionId, apiVersion);
             },
             async put(body, options = {}) {
-                return await _fetchWithRetry(path, self.token, 'PUT', body, options, 2, userId, sessionId);
+                return await _fetchWithRetry(path, self.token, 'PUT', body, options, 2, userId, sessionId, apiVersion);
             },
             async patch(body, options = {}) {
-                return await _fetchWithRetry(path, self.token, 'PATCH', body, options, 2, userId, sessionId);
+                return await _fetchWithRetry(path, self.token, 'PATCH', body, options, 2, userId, sessionId, apiVersion);
             },
             async delete(options = {}) {
-                return await _fetchWithRetry(path, self.token, 'DELETE', null, options, 2, userId, sessionId);
+                return await _fetchWithRetry(path, self.token, 'DELETE', null, options, 2, userId, sessionId, apiVersion);
             }
         };
+
+        return requestBuilder;
     }
 
     /**
@@ -300,10 +313,11 @@ class GraphClient {
  * @param {number} retries
  * @param {string} userId - User ID for logging context (optional)
  * @param {string} sessionId - Session ID for logging context (optional)
+ * @param {string} apiVersion - API version (e.g., 'v1.0' or 'beta'), defaults to 'v1.0'
  */
-async function _fetchWithRetry(path, token, method, body, options, retries = 2, userId, sessionId) {
+async function _fetchWithRetry(path, token, method, body, options, retries = 2, userId, sessionId, apiVersion = 'v1.0') {
     const startTime = Date.now();
-    const url = (path.startsWith('http') ? path : `https://graph.microsoft.com/v1.0${path}`);
+    const url = (path.startsWith('http') ? path : `https://graph.microsoft.com/${apiVersion}${path}`);
     const headers = Object.assign({
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
