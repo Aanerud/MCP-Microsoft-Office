@@ -565,38 +565,158 @@ The logging system ensures complete visibility into system operations while main
 
 ## Multi-User Architecture
 
-### Remote Service Design
+### System Overview
+
+The MCP server supports multiple concurrent users, each with their own authentication method and isolated data:
+
 ```
-Claude Desktop ←→ MCP Adapter ←→ Remote MCP Server ←→ Microsoft 365
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         MCP Server (Remote or Local)                        │
+│                         Supports Multiple Users                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  User A (ms365:userA@company.com)    │  User B (ms365:userB@corp.com)       │
+│  └─ Auth: OAuth Flow                 │  └─ Auth: Enterprise Token           │
+│  └─ Tokens stored with userId        │  └─ Tokens stored with userId        │
+│                                                                             │
+│  MCP Clients for User A:             │  MCP Clients for User B:             │
+│  ├─ Claude Desktop (deviceId: xxx)   │  ├─ Claude Desktop (deviceId: aaa)   │
+│  └─ Other MCP Client (deviceId: yyy) │  └─ Other MCP Client (deviceId: bbb) │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The MCP server can be deployed as a remote service, allowing multiple users to connect via MCP adapters:
+### Data Flow Architecture
 
-- **Session-Based User Isolation**: User sessions are managed by `session-service.cjs` with unique session IDs
-- **Dual Authentication**: Supports both browser session and JWT bearer token authentication
-- **Remote Server Configuration**: MCP adapter connects via `MCP_SERVER_URL` environment variable
-- **OAuth 2.0 Compliance**: Supports discovery via `/.well-known/oauth-protected-resource` endpoint
-- **Device Registry**: Secure management and authorization of MCP adapter connections
+```
+┌──────────────┐     MCP Bearer Token      ┌────────────┐    MS Graph Token    ┌───────────────┐
+│  MCP Client  │ ◄─────────────────────► │ MCP Server │ ◄─────────────────► │ Microsoft 365 │
+│(Claude, etc.)│   (Transport Security)   │            │   (API Access)       │  Graph API    │
+└──────────────┘                          └────────────┘                      └───────────────┘
+```
 
-### User Isolation & Session Management
+**Two distinct tokens serve different purposes:**
 
-Each user's data is completely isolated through session-based architecture:
+| Token | Purpose | Contains | Used For |
+|-------|---------|----------|----------|
+| **MCP Bearer Token** | Transport security | `userId` + `deviceId` | MCP Client ↔ MCP Server communication |
+| **Microsoft Graph Token** | API access | Microsoft identity | MCP Server ↔ Microsoft 365 API calls |
+
+### Key Identifiers
+
+- **`userId`** (`ms365:email@domain.com`): Identifies the Microsoft 365 user. Used for storing and retrieving Microsoft Graph tokens.
+- **`deviceId`** (`mcp-token-xxx-abc`): Identifies the specific MCP client instance. Used for tracking, auditing, and client management.
+
+---
+
+## Authentication Methods
+
+The server supports **two authentication methods** for obtaining Microsoft Graph tokens:
+
+### Method 1: OAuth Authorization Code Flow
+
+Traditional web-based authentication where users log in through Microsoft's OAuth flow.
+
+**How it works:**
+1. User visits the MCP server web UI
+2. Clicks "Login with Microsoft"
+3. Redirected to Microsoft login page
+4. After authentication, redirected back to `/api/auth/callback`
+5. Server stores tokens and manages automatic refresh
+
+**Best for:**
+- Interactive web sessions
+- Development and testing
+- Users who can access a browser
+
+### Method 2: Enterprise Token Flow (Manual JWT)
+
+Direct injection of a pre-obtained Microsoft Graph access token.
+
+**How it works:**
+1. User obtains a Microsoft Graph token from an enterprise tool (Windows SSO, PowerShell, etc.)
+2. Pastes the token in the "Enterprise Token" field in the web UI
+3. Server validates and stores the token
+4. Token is used directly for Graph API calls (no refresh - must paste new token when expired)
+
+**Best for:**
+- Enterprise environments with Windows SSO
+- Automated scripts and tools
+- Environments where OAuth redirect isn't practical
+
+### Authentication Flow Summary
+
+| Step | OAuth Flow | Enterprise Token Flow |
+|------|------------|----------------------|
+| 1 | Click "Login with Microsoft" | Paste token in "Enterprise Token" field |
+| 2 | Complete Microsoft login | Click "Submit Token" |
+| 3 | Server receives tokens via callback | Server validates and stores token |
+| 4 | Generate MCP Bearer token | Generate MCP Bearer token |
+| 5 | Configure MCP client | Configure MCP client |
+
+Both methods result in the same MCP Bearer token format for client configuration.
+
+---
+
+## Connecting MCP Clients
+
+### Step 1: Authenticate on the Web UI
+
+1. Go to your MCP server URL (e.g., `https://your-server.com` or `http://localhost:3000`)
+2. Choose authentication method:
+   - **OAuth**: Click "Login with Microsoft" and complete the flow
+   - **Enterprise Token**: Paste your Microsoft Graph token and click "Submit"
+
+### Step 2: Generate MCP Bearer Token
+
+After authentication, click "Generate MCP Token" to get your configuration.
+
+### Step 3: Configure Claude Desktop
+
+Copy the generated configuration to your Claude Desktop config file:
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+Example configuration:
+```json
+{
+  "mcpServers": {
+    "microsoft-365": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://your-server.com/api/mcp/sse",
+        "--header",
+        "Authorization:${MCP_AUTH}"
+      ],
+      "env": {
+        "MCP_AUTH": "Bearer eyJhbGc..."
+      }
+    }
+  }
+}
+```
+
+### Step 4: Restart Claude Desktop
+
+Restart Claude Desktop to load the new configuration. You should see the Microsoft 365 tools available.
+
+---
+
+## User Isolation & Session Management
+
+Each user's data is completely isolated through the userId-based architecture:
+
+- **Token Storage**: All tokens stored with `userId` as the key prefix
+- **Session Isolation**: Each user has their own session context
+- **Audit Logging**: All operations logged with `userId` for accountability
 
 ```javascript
-// From session-service.cjs
-async createSession(options = {}) {
-    const sessionId = uuid();
-    const sessionSecret = crypto.randomBytes(SESSION_SECRET_LENGTH).toString('hex');
-    const expiresAt = Date.now() + SESSION_EXPIRY;
-    
-    const sessionData = {
-        session_id: sessionId,
-        session_secret: sessionSecret,
-        expires_at: expiresAt,
-        created_at: Date.now(),
-        // User-specific data storage
-    };
-}
+// Token storage keys use userId for isolation
+`ms365:user@company.com:external-graph-token`  // Enterprise token
+`ms365:user@company.com:token-source`          // Auth method tracking
+`ms365:user@company.com:ms-access-token`       // OAuth token
 ```
 
 ---
