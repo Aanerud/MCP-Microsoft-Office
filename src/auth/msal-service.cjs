@@ -559,14 +559,16 @@ async function handleAuthCallback(req, res) {
             }
             
             // MICROSOFT 365-CENTRIC AUTH: Store token using Microsoft 365 email as user identifier
+            // CRITICAL FIX: Use ms365:email as the userId for storage, NOT the browser session ID
+            // This ensures MCP adapter API calls can retrieve the token using the same userId
             const userKey = `ms365:${userInfo.username}`;
-            await storageService.setSecureSetting(`${userKey}:ms-access-token`, userInfo.accessToken, req.session?.id);
+            await storageService.setSecureSetting(`${userKey}:ms-access-token`, userInfo.accessToken, userKey);
             await storageService.setSetting(`${userKey}:ms-user-info`, {
                 username: userInfo.username,
                 name: userInfo.name,
                 homeAccountId: userInfo.homeAccountId,
                 expiresOn: userInfo.expiresOn
-            }, req.session?.id);
+            }, userKey);
             
             if (process.env.NODE_ENV === 'development') {
                 MonitoringService.debug('Authentication token stored successfully', {
@@ -1266,11 +1268,18 @@ async function logout(req, res) {
                 }, 'auth');
             }
             
-            // Clear session-based tokens if session exists
+            // Clear Microsoft 365-based tokens using the ms365:email format
+            // Also clear any legacy session-based tokens for backwards compatibility
+            if (req.session?.msUser?.username) {
+                const userKey = `ms365:${req.session.msUser.username}`;
+                await storageService.setSecureSetting(`${userKey}:ms-access-token`, '', userKey);
+                await storageService.setSetting(`${userKey}:ms-user-info`, null, userKey);
+            }
+            // Also clear legacy session-based tokens if session exists
             if (req.session?.id) {
-                const userKey = `user:${req.session.id}`;
-                await storageService.setSecureSetting(`${userKey}:ms-access-token`, '', req.session.id);
-                await storageService.setSetting(`${userKey}:ms-user-info`, null, req.session.id);
+                const legacyKey = `user:${req.session.id}`;
+                await storageService.setSecureSetting(`${legacyKey}:ms-access-token`, '', req.session.id);
+                await storageService.setSetting(`${legacyKey}:ms-user-info`, null, req.session.id);
             }
             
             if (process.env.NODE_ENV === 'development') {
