@@ -16,7 +16,7 @@ build/
 out/
 
 # Test and coverage reports (removed test infrastructure)
-test/
+tests/
 coverage/
 .nyc_output/
 coverage-final.json
@@ -105,3 +105,5 @@ Thumbs.db
 # Optional package manager files
 yarn.lock
 pnpm-lock.yaml
+token.txt
+example.txt
