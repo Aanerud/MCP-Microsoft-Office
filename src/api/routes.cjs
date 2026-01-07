@@ -210,10 +210,10 @@ function registerRoutes(router) {
 
     // Versioned API path
     const v1 = express.Router();
-    
+
     // Apply routes logger middleware to all v1 routes
     v1.use(routesLogger());
-    
+
     // Apply authentication middleware to ensure user context is available
     v1.use(requireAuth);
 
@@ -230,7 +230,68 @@ function registerRoutes(router) {
         errorService: apiContext.errorService
     });
 
-    // --- Query Router --- 
+    // --- Permissions Endpoint ---
+    // Returns available scopes and tool capabilities based on user's Microsoft Graph token
+    v1.get('/permissions', async (req, res) => {
+        try {
+            const msalService = require('../auth/msal-service.cjs');
+            const externalTokenValidator = require('../auth/external-token-validator.cjs');
+
+            // Get the Microsoft Graph token
+            const accessToken = await msalService.getAccessToken(req);
+            if (!accessToken) {
+                return res.status(401).json({ error: 'No access token available' });
+            }
+
+            // Decode token and extract scopes
+            const decoded = externalTokenValidator.decodeToken(accessToken);
+            const scopes = decoded.payload.scp ? decoded.payload.scp.split(' ').sort() : [];
+
+            // Map scopes to tool capabilities
+            const scopeToTools = {
+                'Mail.Read': ['getInbox', 'searchMail', 'getEmailDetails', 'getMailAttachments'],
+                'Mail.ReadWrite': ['getInbox', 'searchMail', 'getEmailDetails', 'getMailAttachments', 'markAsRead', 'flagEmail'],
+                'Mail.Send': ['sendEmail'],
+                'Calendars.Read': ['getEvents', 'getAvailability'],
+                'Calendars.ReadWrite': ['getEvents', 'getAvailability', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'declineEvent', 'findMeetingTimes'],
+                'Files.Read': ['listFiles', 'searchFiles', 'downloadFile', 'getFileMetadata'],
+                'Files.ReadWrite': ['listFiles', 'searchFiles', 'downloadFile', 'getFileMetadata', 'uploadFile', 'createSharingLink'],
+                'People.Read': ['findPeople', 'getRelevantPeople'],
+                'Chat.Read': ['listChats', 'getChatMessages'],
+                'Chat.ReadWrite': ['listChats', 'getChatMessages', 'sendChatMessage'],
+                'OnlineMeetings.Read': ['listOnlineMeetings', 'getOnlineMeeting'],
+                'OnlineMeetings.ReadWrite': ['listOnlineMeetings', 'getOnlineMeeting', 'createOnlineMeeting'],
+                'Team.ReadBasic.All': ['listJoinedTeams'],
+                'Channel.ReadBasic.All': ['listTeamChannels', 'getChannelMessages'],
+                'ChannelMessage.Send': ['sendChannelMessage'],
+                'Tasks.Read': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask'],
+                'Tasks.ReadWrite': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'createTask', 'updateTask', 'deleteTask', 'completeTask'],
+                'Contacts.Read': ['listContacts', 'getContact', 'searchContacts'],
+                'Contacts.ReadWrite': ['listContacts', 'getContact', 'searchContacts', 'createContact', 'updateContact', 'deleteContact'],
+                'Group.Read.All': ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'],
+                'User.Read': ['getProfile']
+            };
+
+            // Build available tools from scopes
+            const availableTools = new Set();
+            for (const scope of scopes) {
+                const tools = scopeToTools[scope] || [];
+                tools.forEach(t => availableTools.add(t));
+            }
+
+            res.json({
+                scopes,
+                availableTools: Array.from(availableTools).sort(),
+                scopeCount: scopes.length,
+                toolCount: availableTools.size
+            });
+        } catch (error) {
+            MonitoringService.error('Permissions check failed', { error: error.message }, 'routes');
+            res.status(500).json({ error: 'Failed to check permissions', message: error.message });
+        }
+    });
+
+    // --- Query Router ---
     const queryRouter = express.Router();
     // Apply controller logger middleware
     queryRouter.use(controllerLogger());

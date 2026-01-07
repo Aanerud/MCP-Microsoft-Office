@@ -138,8 +138,8 @@ const stubModuleRegistry = {
         return modules[moduleName] || null;
     }
 };
-const toolsService = createToolsService({ 
-    moduleRegistry: stubModuleRegistry, 
+const toolsService = createToolsService({
+    moduleRegistry: stubModuleRegistry,
     logger: {
         debug: (...args) => {/* Silent */},
         info: (...args) => {/* Silent */},
@@ -147,6 +147,58 @@ const toolsService = createToolsService({
         error: (...args) => {/* Silent */}
     }
 });
+
+// Permission-based tool filtering cache
+let permissionsCache = null;
+let permissionsCacheTime = 0;
+const PERMISSIONS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch available permissions from server and cache them
+ * @returns {Promise<Set<string>>} Set of available tool names
+ */
+async function getAvailableTools() {
+    const now = Date.now();
+
+    // Return cached permissions if still valid
+    if (permissionsCache && (now - permissionsCacheTime) < PERMISSIONS_CACHE_TTL) {
+        return permissionsCache;
+    }
+
+    try {
+        const result = await callApi('GET', '/v1/permissions');
+        if (result && result.availableTools) {
+            permissionsCache = new Set(result.availableTools);
+            permissionsCacheTime = now;
+            logDebug(`[Permissions] Loaded ${result.availableTools.length} available tools from ${result.scopeCount} scopes`);
+            return permissionsCache;
+        }
+    } catch (error) {
+        logDebug(`[Permissions] Failed to fetch permissions: ${error.message}`);
+    }
+
+    // Return null if permissions check failed - don't filter tools
+    return null;
+}
+
+/**
+ * Filter tools list based on available permissions
+ * @param {Array} tools - Full list of tools
+ * @returns {Promise<Array>} Filtered list of tools user has permission for
+ */
+async function filterToolsByPermissions(tools) {
+    const availableTools = await getAvailableTools();
+
+    // If permissions check failed, return all tools (fail-open)
+    if (!availableTools) {
+        return tools;
+    }
+
+    // Filter tools based on available permissions
+    const filtered = tools.filter(tool => availableTools.has(tool.name));
+    logDebug(`[Permissions] Filtered tools: ${filtered.length}/${tools.length} available`);
+    return filtered;
+}
 
 /**
  * Call the API server
@@ -2229,73 +2281,49 @@ async function handleRequest(msg) {
                 try {
                     const toolsResult = await callApi('GET', '/tools');
 
+                    // Helper to format tools for MCP response
+                    const formatTool = (tool) => ({
+                        name: tool.name,
+                        description: tool.description,
+                        inputSchema: {
+                            type: 'object',
+                            properties: Object.entries(tool.parameters || {}).reduce((acc, [key, value]) => {
+                                acc[key] = {
+                                    type: value.type || 'string',
+                                    description: value.description || ''
+                                };
+                                return acc;
+                            }, {}),
+                            required: Object.entries(tool.parameters || {})
+                                .filter(([_, value]) => !value.optional)
+                                .map(([key, _]) => key)
+                        }
+                    });
+
+                    let mcpTools = [];
                     if (!toolsResult || !toolsResult.tools) {
-                        
                         // Use the tools service to get the tools list
                         const toolsFromService = toolsService.getAllTools();
-                        
                         if (toolsFromService && toolsFromService.length > 0) {
-                            // Format tools for MCP response
-                            const mcpTools = toolsFromService.map(tool => ({
-                                name: tool.name,
-                                description: tool.description,
-                                inputSchema: {
-                                    type: 'object',
-                                    properties: Object.entries(tool.parameters || {}).reduce((acc, [key, value]) => {
-                                        acc[key] = {
-                                            type: value.type || 'string',
-                                            description: value.description || ''
-                                        };
-                                        return acc;
-                                    }, {}),
-                                    required: Object.entries(tool.parameters || {})
-                                        .filter(([_, value]) => !value.optional)
-                                        .map(([key, _]) => key)
-                                }
-                            }));
-                            
-                            result = {
-                                protocolVersion: (params && params.protocolVersion) ? params.protocolVersion : "2024-11-05",
-                                tools: mcpTools
-                            };
-                        } else {
-                            // If tools service also fails, return empty list
-                            result = {
-                                protocolVersion: (params && params.protocolVersion) ? params.protocolVersion : "2024-11-05",
-                                tools: []
-                            };
+                            mcpTools = toolsFromService.map(formatTool);
                         }
                     } else {
-                        // Convert API tools format to MCP format
-                        const mcpTools = toolsResult.tools.map(tool => ({
-                            name: tool.name,
-                            description: tool.description,
-                            inputSchema: {
-                                type: 'object',
-                                properties: Object.entries(tool.parameters || {}).reduce((acc, [key, value]) => {
-                                    acc[key] = {
-                                        type: value.type || 'string',
-                                        description: value.description || ''
-                                    };
-                                    return acc;
-                                }, {}),
-                                required: Object.entries(tool.parameters || {})
-                                    .filter(([_, value]) => !value.optional)
-                                    .map(([key, _]) => key)
-                            }
-                        }));
-
-                        result = {
-                            protocolVersion: (params && params.protocolVersion) ? params.protocolVersion : "2024-11-05",
-                            tools: mcpTools
-                        };
+                        mcpTools = toolsResult.tools.map(formatTool);
                     }
+
+                    // Filter tools based on user's permissions
+                    const filteredTools = await filterToolsByPermissions(mcpTools);
+
+                    result = {
+                        protocolVersion: (params && params.protocolVersion) ? params.protocolVersion : "2024-11-05",
+                        tools: filteredTools
+                    };
                 } catch (error) {
-                    
+
                     // Use the tools service as fallback
                     try {
                         const toolsFromService = toolsService.getAllTools();
-                        
+
                         if (toolsFromService && toolsFromService.length > 0) {
                             // Format tools for MCP response
                             const mcpTools = toolsFromService.map(tool => ({
@@ -2315,10 +2343,13 @@ async function handleRequest(msg) {
                                         .map(([key, _]) => key)
                                 }
                             }));
-                            
+
+                            // Filter tools based on user's permissions
+                            const filteredTools = await filterToolsByPermissions(mcpTools);
+
                             result = {
                                 protocolVersion: (params && params.protocolVersion) ? params.protocolVersion : "2024-11-05",
-                                tools: mcpTools
+                                tools: filteredTools
                             };
                         } else {
                             // If tools service also fails, return empty list
