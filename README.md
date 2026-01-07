@@ -178,35 +178,9 @@ After logging in:
 
 ---
 
-### Step 5: Set Up the MCP Adapter
+### Step 5: Configure Claude Desktop
 
-The adapter is a small file that Claude Desktop uses to communicate with the server.
-
-#### On macOS
-
-```bash
-# Create a folder for MCP adapters
-mkdir -p ~/mcp-adapters
-
-# Copy the adapter (from the project you cloned, or download from your server)
-cp /path/to/MCP-Microsoft-Office/mcp-adapter.cjs ~/mcp-adapters/
-```
-
-#### On Windows
-
-```powershell
-# Create a folder for MCP adapters
-mkdir %USERPROFILE%\mcp-adapters
-
-# Copy the adapter
-copy C:\path\to\MCP-Microsoft-Office\mcp-adapter.cjs %USERPROFILE%\mcp-adapters\
-```
-
----
-
-### Step 6: Configure Claude Desktop
-
-Claude Desktop needs to know about your MCP adapter.
+The adapter runs from the project folder (it needs `node_modules` for dependencies).
 
 #### On macOS
 
@@ -217,7 +191,7 @@ Edit: `~/Library/Application Support/Claude/claude_desktop_config.json`
   "mcpServers": {
     "microsoft365": {
       "command": "node",
-      "args": ["/Users/YOUR_USERNAME/mcp-adapters/mcp-adapter.cjs"],
+      "args": ["/Users/YOUR_USERNAME/MCP-Microsoft-Office/mcp-adapter.cjs"],
       "env": {
         "MCP_SERVER_URL": "http://localhost:3000",
         "MCP_BEARER_TOKEN": "paste-your-token-here"
@@ -228,7 +202,7 @@ Edit: `~/Library/Application Support/Claude/claude_desktop_config.json`
 ```
 
 **Replace:**
-- `YOUR_USERNAME` with your macOS username
+- `YOUR_USERNAME` with your macOS username (or use full path to where you cloned the project)
 - `paste-your-token-here` with the token from Step 4
 - Change `MCP_SERVER_URL` if using a remote server
 
@@ -241,7 +215,7 @@ Edit: `%APPDATA%\Claude\claude_desktop_config.json`
   "mcpServers": {
     "microsoft365": {
       "command": "node",
-      "args": ["C:\\Users\\YOUR_USERNAME\\mcp-adapters\\mcp-adapter.cjs"],
+      "args": ["C:\\Users\\YOUR_USERNAME\\MCP-Microsoft-Office\\mcp-adapter.cjs"],
       "env": {
         "MCP_SERVER_URL": "http://localhost:3000",
         "MCP_BEARER_TOKEN": "paste-your-token-here"
@@ -253,7 +227,7 @@ Edit: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ---
 
-### Step 7: Restart Claude Desktop
+### Step 6: Restart Claude Desktop
 
 1. Quit Claude Desktop completely
 2. Start it again
