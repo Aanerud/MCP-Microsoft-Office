@@ -607,6 +607,21 @@ async function startDevServer(userId, sessionId) {
     next();
   });
 
+  // OAuth 2.0 Authorization Server Metadata (RFC 8414)
+  // Must be at root level for mcp-remote OAuth discovery
+  app.get('/.well-known/oauth-authorization-server', (req, res) => {
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    res.json({
+      issuer: baseUrl,
+      authorization_endpoint: `${baseUrl}/api/auth/login`,
+      token_endpoint: `${baseUrl}/api/auth/device/token`,
+      response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code', 'urn:ietf:params:oauth:grant-type:device_code'],
+      code_challenge_methods_supported: ['S256'],
+      token_endpoint_auth_methods_supported: ['none']
+    });
+  });
+
   // Explicitly define MIME types
   const mimeTypes = {
     '.html': 'text/html',
