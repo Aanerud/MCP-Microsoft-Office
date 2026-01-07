@@ -580,20 +580,18 @@ export class UIManager {
         if (configExample) {
             const serverUrl = window.location.origin;
 
-            // mcp-remote config format for Claude Desktop
-            // Note: No spaces around ':' in header arg (Claude Desktop bug workaround)
+            // Local adapter config format for Claude Desktop
+            // User must download mcp-adapter.cjs and update the path
             const configJson = {
                 mcpServers: {
                     "microsoft-365": {
-                        command: "npx",
+                        command: "node",
                         args: [
-                            "mcp-remote",
-                            `${serverUrl}/api/mcp/sse`,
-                            "--header",
-                            "Authorization:${MCP_AUTH}"
+                            "/path/to/mcp-adapter.cjs"
                         ],
                         env: {
-                            MCP_AUTH: `Bearer ${tokenData.access_token}`
+                            MCP_SERVER_URL: serverUrl,
+                            MCP_BEARER_TOKEN: tokenData.access_token
                         }
                     }
                 }

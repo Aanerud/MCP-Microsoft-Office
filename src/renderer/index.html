@@ -46,7 +46,13 @@
                         </button>
                     </div>
                     <div class="config-example mt-2">
-                        <label>Claude Desktop MCP Config:</label>
+                        <label>Step 1: Download the MCP Adapter</label>
+                        <div class="config-buttons mt-1 mb-2">
+                            <button id="download-adapter-button" class="btn btn-sm btn-secondary">
+                                ⬇️ Download mcp-adapter.cjs
+                            </button>
+                        </div>
+                        <label>Step 2: Claude Desktop Config:</label>
                         <pre id="config-example" class="config-code"></pre>
                         <div class="config-buttons mt-2">
                             <button id="copy-config-button" class="btn btn-sm btn-primary">
@@ -54,11 +60,15 @@
                             </button>
                         </div>
                         <p class="config-help mt-2">
-                            Add this to your <code>claude_desktop_config.json</code> file.
+                            <strong>Instructions:</strong>
+                            <br>
+                            1. Download the adapter file above
+                            <br>
+                            2. Update the path in the config to where you saved it
+                            <br>
+                            3. Add to <code>claude_desktop_config.json</code>
                             <br>
                             <small>Location: <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) or <code>%APPDATA%\Claude\claude_desktop_config.json</code> (Windows)</small>
-                            <br>
-                            <small>Uses <code>mcp-remote</code> proxy (installed automatically via npx).</small>
                         </p>
                     </div>
                 </div>
