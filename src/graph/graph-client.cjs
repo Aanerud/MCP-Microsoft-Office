@@ -71,12 +71,9 @@ async function createClient(req, userId, sessionId) {
         // For API calls (including internal MCP calls), use the stored token
         if (isApiCall) {
             // Extract user ID from request for MCP calls
-            let tokenUserId = null;
-            if (req?.user?.deviceId && req.user.deviceId.startsWith('mcp-token-')) {
-                tokenUserId = req.user.deviceId;
-            } else if (req?.user?.userId) {
-                tokenUserId = req.user.userId;
-            }
+            // Always use userId (ms365:email) for token lookup - this matches how external tokens are stored
+            // The deviceId (mcp-token-xxx) is for device tracking, NOT for token lookup
+            let tokenUserId = req?.user?.userId || null;
             
             // Pattern 1: Development Debug Logs - Token retrieval
             if (process.env.NODE_ENV === 'development') {
