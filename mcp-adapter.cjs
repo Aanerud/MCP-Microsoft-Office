@@ -116,14 +116,24 @@ const stubModuleRegistry = {
         { id: 'mail', name: 'mail', capabilities: ['getInbox', 'sendEmail', 'searchEmails', 'flagEmail', 'getEmailDetails', 'markAsRead', 'readMailDetails', 'getMailAttachments', 'markEmailRead', 'addMailAttachment', 'removeMailAttachment'] },
         { id: 'calendar', name: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
         { id: 'files', name: 'files', capabilities: ['listFiles', 'searchFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
-        { id: 'people', name: 'people', capabilities: ['find', 'search', 'getRelevantPeople', 'getPersonById'] }
+        { id: 'people', name: 'people', capabilities: ['find', 'search', 'getRelevantPeople', 'getPersonById'] },
+        { id: 'teams', name: 'teams', capabilities: ['listChats', 'getChat', 'listChatMessages', 'sendChatMessage', 'listChannels', 'getChannel', 'listChannelMessages', 'sendChannelMessage', 'listTeams', 'getTeam', 'createOnlineMeeting', 'getOnlineMeeting'] },
+        { id: 'search', name: 'search', capabilities: ['search'] },
+        { id: 'todo', name: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
+        { id: 'contacts', name: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
+        { id: 'groups', name: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] }
     ],
     getModule: (moduleName) => {
         const modules = {
             'mail': { id: 'mail', capabilities: ['getInbox', 'sendEmail', 'searchEmails', 'flagEmail', 'getEmailDetails', 'markAsRead', 'readMailDetails', 'getMailAttachments', 'markEmailRead', 'addMailAttachment', 'removeMailAttachment'] },
             'calendar': { id: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
             'files': { id: 'files', capabilities: ['listFiles', 'searchFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
-            'people': { id: 'people', capabilities: ['find', 'search', 'getRelevantPeople', 'getPersonById'] }
+            'people': { id: 'people', capabilities: ['find', 'search', 'getRelevantPeople', 'getPersonById'] },
+            'teams': { id: 'teams', capabilities: ['listChats', 'getChat', 'listChatMessages', 'sendChatMessage', 'listChannels', 'getChannel', 'listChannelMessages', 'sendChannelMessage', 'listTeams', 'getTeam', 'createOnlineMeeting', 'getOnlineMeeting'] },
+            'search': { id: 'search', capabilities: ['search'] },
+            'todo': { id: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
+            'contacts': { id: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
+            'groups': { id: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] }
         };
         return modules[moduleName] || null;
     }
@@ -1594,6 +1604,307 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                     throw new Error('Person ID is required for getPersonById');
                 }
                 apiPath = `/v1/people/${params.id}`;
+                apiMethod = 'GET';
+                break;
+
+            // Teams module endpoints
+            case 'teams.listChats':
+                apiPath = '/v1/teams/chats';
+                apiMethod = 'GET';
+                break;
+            case 'teams.getChat':
+                if (!params.chatId) {
+                    throw new Error('Chat ID is required for getChat');
+                }
+                apiPath = `/v1/teams/chats/${params.chatId}`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.listChatMessages':
+            case 'teams.getChatMessages':
+                if (!params.chatId) {
+                    throw new Error('Chat ID is required for listChatMessages');
+                }
+                apiPath = `/v1/teams/chats/${params.chatId}/messages`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.sendChatMessage':
+                if (!params.chatId) {
+                    throw new Error('Chat ID is required for sendChatMessage');
+                }
+                apiPath = `/v1/teams/chats/${params.chatId}/messages`;
+                apiMethod = 'POST';
+                apiData = {
+                    content: params.content,
+                    contentType: params.contentType || 'text'
+                };
+                break;
+            case 'teams.listTeams':
+            case 'teams.listJoinedTeams':
+                apiPath = '/v1/teams';
+                apiMethod = 'GET';
+                break;
+            case 'teams.getTeam':
+                if (!params.teamId) {
+                    throw new Error('Team ID is required for getTeam');
+                }
+                apiPath = `/v1/teams/${params.teamId}`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.listChannels':
+            case 'teams.listTeamChannels':
+                if (!params.teamId) {
+                    throw new Error('Team ID is required for listChannels');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.getChannel':
+                if (!params.teamId || !params.channelId) {
+                    throw new Error('Team ID and Channel ID are required for getChannel');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels/${params.channelId}`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.listChannelMessages':
+            case 'teams.getChannelMessages':
+                if (!params.teamId || !params.channelId) {
+                    throw new Error('Team ID and Channel ID are required for listChannelMessages');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels/${params.channelId}/messages`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.sendChannelMessage':
+                if (!params.teamId || !params.channelId) {
+                    throw new Error('Team ID and Channel ID are required for sendChannelMessage');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels/${params.channelId}/messages`;
+                apiMethod = 'POST';
+                apiData = {
+                    content: params.content,
+                    contentType: params.contentType || 'text'
+                };
+                break;
+            case 'teams.replyToMessage':
+                if (!params.teamId || !params.channelId || !params.messageId) {
+                    throw new Error('Team ID, Channel ID, and Message ID are required for replyToMessage');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels/${params.channelId}/messages/${params.messageId}/replies`;
+                apiMethod = 'POST';
+                apiData = {
+                    content: params.content,
+                    contentType: params.contentType || 'text'
+                };
+                break;
+            case 'teams.listOnlineMeetings':
+                apiPath = '/v1/teams/meetings';
+                apiMethod = 'GET';
+                break;
+            case 'teams.createOnlineMeeting':
+                apiPath = '/v1/teams/meetings';
+                apiMethod = 'POST';
+                apiData = {
+                    subject: params.subject,
+                    startDateTime: params.startDateTime,
+                    endDateTime: params.endDateTime,
+                    participants: params.participants
+                };
+                break;
+            case 'teams.getOnlineMeeting':
+                if (!params.meetingId) {
+                    throw new Error('Meeting ID is required for getOnlineMeeting');
+                }
+                apiPath = `/v1/teams/meetings/${params.meetingId}`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.getMeetingByJoinUrl':
+                apiPath = '/v1/teams/meetings/findByJoinUrl';
+                apiMethod = 'GET';
+                break;
+
+            // Search module endpoints
+            case 'search.search':
+                apiPath = '/v1/search';
+                apiMethod = 'POST';
+                apiData = {
+                    query: params.query,
+                    entityTypes: params.entityTypes,
+                    from: params.from,
+                    size: params.size
+                };
+                break;
+
+            // To-Do module endpoints
+            case 'todo.listTaskLists':
+                apiPath = '/v1/todo/lists';
+                apiMethod = 'GET';
+                break;
+            case 'todo.getTaskList':
+                if (!params.listId) {
+                    throw new Error('List ID is required for getTaskList');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}`;
+                apiMethod = 'GET';
+                break;
+            case 'todo.createTaskList':
+                apiPath = '/v1/todo/lists';
+                apiMethod = 'POST';
+                apiData = {
+                    displayName: params.displayName
+                };
+                break;
+            case 'todo.updateTaskList':
+                if (!params.listId) {
+                    throw new Error('List ID is required for updateTaskList');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}`;
+                apiMethod = 'PATCH';
+                apiData = {
+                    displayName: params.displayName
+                };
+                break;
+            case 'todo.deleteTaskList':
+                if (!params.listId) {
+                    throw new Error('List ID is required for deleteTaskList');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}`;
+                apiMethod = 'DELETE';
+                break;
+            case 'todo.listTasks':
+                if (!params.listId) {
+                    throw new Error('List ID is required for listTasks');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}/tasks`;
+                apiMethod = 'GET';
+                break;
+            case 'todo.getTask':
+                if (!params.listId || !params.taskId) {
+                    throw new Error('List ID and Task ID are required for getTask');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}/tasks/${params.taskId}`;
+                apiMethod = 'GET';
+                break;
+            case 'todo.createTask':
+                if (!params.listId) {
+                    throw new Error('List ID is required for createTask');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}/tasks`;
+                apiMethod = 'POST';
+                apiData = {
+                    title: params.title,
+                    body: params.body,
+                    importance: params.importance,
+                    dueDateTime: params.dueDateTime,
+                    reminderDateTime: params.reminderDateTime,
+                    isReminderOn: params.isReminderOn
+                };
+                break;
+            case 'todo.updateTask':
+                if (!params.listId || !params.taskId) {
+                    throw new Error('List ID and Task ID are required for updateTask');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}/tasks/${params.taskId}`;
+                apiMethod = 'PATCH';
+                apiData = {
+                    title: params.title,
+                    body: params.body,
+                    importance: params.importance,
+                    status: params.status,
+                    dueDateTime: params.dueDateTime,
+                    reminderDateTime: params.reminderDateTime,
+                    isReminderOn: params.isReminderOn
+                };
+                break;
+            case 'todo.deleteTask':
+                if (!params.listId || !params.taskId) {
+                    throw new Error('List ID and Task ID are required for deleteTask');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}/tasks/${params.taskId}`;
+                apiMethod = 'DELETE';
+                break;
+            case 'todo.completeTask':
+                if (!params.listId || !params.taskId) {
+                    throw new Error('List ID and Task ID are required for completeTask');
+                }
+                apiPath = `/v1/todo/lists/${params.listId}/tasks/${params.taskId}/complete`;
+                apiMethod = 'POST';
+                break;
+
+            // Contacts module endpoints
+            case 'contacts.listContacts':
+                apiPath = '/v1/contacts';
+                apiMethod = 'GET';
+                break;
+            case 'contacts.getContact':
+                if (!params.contactId) {
+                    throw new Error('Contact ID is required for getContact');
+                }
+                apiPath = `/v1/contacts/${params.contactId}`;
+                apiMethod = 'GET';
+                break;
+            case 'contacts.createContact':
+                apiPath = '/v1/contacts';
+                apiMethod = 'POST';
+                apiData = {
+                    givenName: params.givenName,
+                    surname: params.surname,
+                    displayName: params.displayName,
+                    emailAddresses: params.emailAddresses,
+                    businessPhones: params.businessPhones,
+                    mobilePhone: params.mobilePhone,
+                    companyName: params.companyName,
+                    jobTitle: params.jobTitle
+                };
+                break;
+            case 'contacts.updateContact':
+                if (!params.contactId) {
+                    throw new Error('Contact ID is required for updateContact');
+                }
+                apiPath = `/v1/contacts/${params.contactId}`;
+                apiMethod = 'PATCH';
+                apiData = {
+                    givenName: params.givenName,
+                    surname: params.surname,
+                    displayName: params.displayName,
+                    emailAddresses: params.emailAddresses,
+                    businessPhones: params.businessPhones,
+                    mobilePhone: params.mobilePhone,
+                    companyName: params.companyName,
+                    jobTitle: params.jobTitle
+                };
+                break;
+            case 'contacts.deleteContact':
+                if (!params.contactId) {
+                    throw new Error('Contact ID is required for deleteContact');
+                }
+                apiPath = `/v1/contacts/${params.contactId}`;
+                apiMethod = 'DELETE';
+                break;
+            case 'contacts.searchContacts':
+                apiPath = '/v1/contacts/search';
+                apiMethod = 'GET';
+                break;
+
+            // Groups module endpoints
+            case 'groups.listGroups':
+                apiPath = '/v1/groups';
+                apiMethod = 'GET';
+                break;
+            case 'groups.getGroup':
+                if (!params.groupId) {
+                    throw new Error('Group ID is required for getGroup');
+                }
+                apiPath = `/v1/groups/${params.groupId}`;
+                apiMethod = 'GET';
+                break;
+            case 'groups.listGroupMembers':
+                if (!params.groupId) {
+                    throw new Error('Group ID is required for listGroupMembers');
+                }
+                apiPath = `/v1/groups/${params.groupId}/members`;
+                apiMethod = 'GET';
+                break;
+            case 'groups.listMyGroups':
+                apiPath = '/v1/groups/my';
                 apiMethod = 'GET';
                 break;
 

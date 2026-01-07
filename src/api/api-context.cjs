@@ -9,6 +9,10 @@ const CalendarModule = require('../modules/calendar/index.cjs');
 const FilesModule = require('../modules/files/index.js');
 const PeopleModule = require('../modules/people/index.cjs');
 const SearchModule = require('../modules/search/index.cjs');
+const TeamsModule = require('../modules/teams/index.cjs');
+const TodoModule = require('../modules/todo/index.cjs');
+const ContactsModule = require('../modules/contacts/index.cjs');
+const GroupsModule = require('../modules/groups/index.cjs');
 const cacheService = require('../core/cache-service.cjs');
 const eventService = require('../core/event-service.cjs');
 const graphClientFactory = require('../graph/graph-client.cjs');
@@ -17,6 +21,10 @@ const mailService = require('../graph/mail-service.cjs');
 const filesService = require('../graph/files-service.cjs');
 const peopleService = require('../graph/people-service.cjs');
 const searchService = require('../graph/search-service.cjs');
+const teamsService = require('../graph/teams-service.cjs');
+const todoService = require('../graph/todo-service.cjs');
+const contactsService = require('../graph/contacts-service.cjs');
+const groupsService = require('../graph/groups-service.cjs');
 
 // Import error and monitoring services
 const ErrorService = require('../core/error-service.cjs');
@@ -28,6 +36,10 @@ const calendarModule = CalendarModule.init({ graphService: calendarService, cach
 const filesModule = FilesModule.init({ graphService: filesService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
 const peopleModule = PeopleModule.init({ graphService: peopleService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
 const searchModule = SearchModule.init({ searchService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
+const teamsModule = TeamsModule.init({ teamsService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
+const todoModule = TodoModule.init({ todoService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
+const contactsModule = ContactsModule.init({ contactsService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
+const groupsModule = GroupsModule.init({ groupsService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
 
 // Register modules
 moduleRegistry.registerModule(mailModule);
@@ -35,6 +47,10 @@ moduleRegistry.registerModule(calendarModule);
 moduleRegistry.registerModule(filesModule);
 moduleRegistry.registerModule(peopleModule);
 moduleRegistry.registerModule(searchModule);
+moduleRegistry.registerModule(teamsModule);
+moduleRegistry.registerModule(todoModule);
+moduleRegistry.registerModule(contactsModule);
+moduleRegistry.registerModule(groupsModule);
 
 // Simple mock NLU agent for development/testing
 const nluAgent = {
@@ -328,6 +344,10 @@ module.exports = {
   filesModule,
   peopleModule,
   searchModule,
+  teamsModule,
+  todoModule,
+  contactsModule,
+  groupsModule,
   moduleRegistry,
   cacheService,
   eventService,
@@ -337,6 +357,10 @@ module.exports = {
   filesService,
   peopleService,
   searchService,
+  teamsService,
+  todoService,
+  contactsService,
+  groupsService,
   toolsService,
   nluAgent,
   contextService,

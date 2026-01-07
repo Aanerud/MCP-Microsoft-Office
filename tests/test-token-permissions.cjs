@@ -127,6 +127,8 @@ const permissionTests = [
 
   // Teams permissions
   { endpoint: '/me/joinedTeams', permission: 'Team.ReadBasic.All', description: 'List joined teams' },
+  { endpoint: '/me/chats?$top=1', permission: 'Chat.Read', description: 'List chats' },
+  { endpoint: '/me/onlineMeetings?$top=1', permission: 'OnlineMeetings.Read', description: 'List online meetings' },
 
   // Notes permissions (OneNote)
   { endpoint: '/me/onenote/notebooks', permission: 'Notes.Read / Notes.Create', description: 'Read OneNote notebooks' },

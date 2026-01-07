@@ -1,9 +1,14 @@
 # Claude assistant files
 **/.claude
 
+# Private deployment files (contain secrets)
+.deployment-private.md
+*.private.md
+
 # Dependencies
 node_modules/
 node_modules*/
+**/node_modules/
 
 # Build outputs
 dist/
@@ -27,6 +32,7 @@ jest.setup.*
 
 # Logs
 logs/
+logs_claude/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -36,6 +42,11 @@ electron-debug.log*
 # Backup files
 *.bak
 *~backup
+backups/
+
+# Token files (contain secrets)
+token.txt
+*.token
 
 # Runtime data
 pids/
@@ -82,6 +93,12 @@ test-*.js
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Duplicate files (macOS creates these)
+* 2
+* 2.*
+**/* 2
+**/* 2.*
 
 # Optional package manager files
 yarn.lock

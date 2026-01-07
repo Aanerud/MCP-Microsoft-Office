@@ -182,7 +182,27 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
         findPeople: { moduleName: 'people', methodName: 'find' },
         getRelevantPeople: { moduleName: 'people', methodName: 'getRelevantPeople' },
         getPersonById: { moduleName: 'people', methodName: 'getPersonById' },
-        
+
+        // Teams module tools - Chat operations
+        listChats: { moduleName: 'teams', methodName: 'listChats' },
+        getChats: { moduleName: 'teams', methodName: 'listChats' },
+        getChatMessages: { moduleName: 'teams', methodName: 'getChatMessages' },
+        sendChatMessage: { moduleName: 'teams', methodName: 'sendChatMessage' },
+        // Teams module tools - Team & channel operations
+        listJoinedTeams: { moduleName: 'teams', methodName: 'listJoinedTeams' },
+        getTeams: { moduleName: 'teams', methodName: 'listJoinedTeams' },
+        listTeamChannels: { moduleName: 'teams', methodName: 'listTeamChannels' },
+        getTeamChannels: { moduleName: 'teams', methodName: 'listTeamChannels' },
+        getChannelMessages: { moduleName: 'teams', methodName: 'getChannelMessages' },
+        sendChannelMessage: { moduleName: 'teams', methodName: 'sendChannelMessage' },
+        replyToMessage: { moduleName: 'teams', methodName: 'replyToMessage' },
+        // Teams module tools - Meeting operations
+        createOnlineMeeting: { moduleName: 'teams', methodName: 'createOnlineMeeting' },
+        createTeamsMeeting: { moduleName: 'teams', methodName: 'createOnlineMeeting' },
+        getOnlineMeeting: { moduleName: 'teams', methodName: 'getOnlineMeeting' },
+        getMeetingByJoinUrl: { moduleName: 'teams', methodName: 'getMeetingByJoinUrl' },
+        listOnlineMeetings: { moduleName: 'teams', methodName: 'listOnlineMeetings' },
+
         // Query module
         query: { moduleName: 'query', methodName: 'processQuery' }
     };
@@ -1319,6 +1339,282 @@ For recurring calendar events or availability checks, use getCalendar instead.`;
                     query: { type: 'string', description: 'Search query for people', required: true },
                     entityTypes: { type: 'array', description: 'Fixed to person', optional: true, default: ['person'], hidden: true },
                     limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
+                };
+                break;
+
+            // ================================================================
+            // TEAMS MODULE TOOLS
+            // ================================================================
+
+            // Teams Chat Tools
+            case 'listChats':
+            case 'getChats':
+                toolDef.description = 'List the user\'s Microsoft Teams chats. Returns recent chat conversations including one-on-one chats and group chats. Use this to find chat IDs before sending messages.';
+                toolDef.endpoint = '/api/v1/teams/chats';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    limit: {
+                        type: 'number',
+                        description: 'Maximum number of chats to retrieve (default: 20, max: 50)',
+                        optional: true,
+                        default: 20
+                    }
+                };
+                break;
+
+            case 'getChatMessages':
+                toolDef.description = 'Get messages from a specific Teams chat. Requires a chat ID which can be obtained from listChats.';
+                toolDef.endpoint = '/api/v1/teams/chats/:chatId/messages';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    chatId: {
+                        type: 'string',
+                        description: 'The ID of the chat to retrieve messages from (required, get from listChats)',
+                        required: true
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Maximum number of messages to retrieve (default: 50)',
+                        optional: true,
+                        default: 50
+                    }
+                };
+                toolDef.parameterMapping = { chatId: { inPath: true } };
+                break;
+
+            case 'sendChatMessage':
+                toolDef.description = 'Send a message to a Teams chat. Requires a chat ID from listChats.';
+                toolDef.endpoint = '/api/v1/teams/chats/:chatId/messages';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    chatId: {
+                        type: 'string',
+                        description: 'The ID of the chat to send the message to',
+                        required: true
+                    },
+                    content: {
+                        type: 'string',
+                        description: 'The message content to send',
+                        required: true
+                    },
+                    contentType: {
+                        type: 'string',
+                        description: 'Content type: text or html',
+                        optional: true,
+                        enum: ['text', 'html'],
+                        default: 'text'
+                    }
+                };
+                toolDef.parameterMapping = { chatId: { inPath: true }, content: { inBody: true }, contentType: { inBody: true } };
+                break;
+
+            // Teams & Channel Tools
+            case 'listJoinedTeams':
+            case 'getTeams':
+                toolDef.description = 'List all Microsoft Teams that the user has joined. Use this to get team IDs for channel operations.';
+                toolDef.endpoint = '/api/v1/teams';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    limit: {
+                        type: 'number',
+                        description: 'Maximum number of teams to retrieve',
+                        optional: true,
+                        default: 100
+                    }
+                };
+                break;
+
+            case 'listTeamChannels':
+            case 'getTeamChannels':
+                toolDef.description = 'List channels in a Microsoft Teams team. Requires a team ID which can be obtained from listJoinedTeams.';
+                toolDef.endpoint = '/api/v1/teams/:teamId/channels';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    teamId: {
+                        type: 'string',
+                        description: 'The ID of the team to list channels from (required, get from listJoinedTeams)',
+                        required: true
+                    }
+                };
+                toolDef.parameterMapping = { teamId: { inPath: true } };
+                break;
+
+            case 'getChannelMessages':
+                toolDef.description = 'Get messages from a Teams channel. Requires team ID and channel ID.';
+                toolDef.endpoint = '/api/v1/teams/:teamId/channels/:channelId/messages';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    teamId: {
+                        type: 'string',
+                        description: 'The ID of the team',
+                        required: true
+                    },
+                    channelId: {
+                        type: 'string',
+                        description: 'The ID of the channel to retrieve messages from',
+                        required: true
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Maximum number of messages to retrieve (default: 50)',
+                        optional: true,
+                        default: 50
+                    }
+                };
+                toolDef.parameterMapping = { teamId: { inPath: true }, channelId: { inPath: true } };
+                break;
+
+            case 'sendChannelMessage':
+                toolDef.description = 'Send a message to a Teams channel. Requires team ID and channel ID.';
+                toolDef.endpoint = '/api/v1/teams/:teamId/channels/:channelId/messages';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    teamId: {
+                        type: 'string',
+                        description: 'The ID of the team',
+                        required: true
+                    },
+                    channelId: {
+                        type: 'string',
+                        description: 'The ID of the channel to send the message to',
+                        required: true
+                    },
+                    content: {
+                        type: 'string',
+                        description: 'The message content to send',
+                        required: true
+                    },
+                    contentType: {
+                        type: 'string',
+                        description: 'Content type: text or html',
+                        optional: true,
+                        enum: ['text', 'html'],
+                        default: 'text'
+                    },
+                    subject: {
+                        type: 'string',
+                        description: 'Subject line for the message (optional)',
+                        optional: true
+                    }
+                };
+                toolDef.parameterMapping = { teamId: { inPath: true }, channelId: { inPath: true }, content: { inBody: true }, contentType: { inBody: true }, subject: { inBody: true } };
+                break;
+
+            case 'replyToMessage':
+                toolDef.description = 'Reply to a message in a Teams channel thread.';
+                toolDef.endpoint = '/api/v1/teams/:teamId/channels/:channelId/messages/:messageId/replies';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    teamId: {
+                        type: 'string',
+                        description: 'The ID of the team',
+                        required: true
+                    },
+                    channelId: {
+                        type: 'string',
+                        description: 'The ID of the channel',
+                        required: true
+                    },
+                    messageId: {
+                        type: 'string',
+                        description: 'The ID of the message to reply to',
+                        required: true
+                    },
+                    content: {
+                        type: 'string',
+                        description: 'The reply content',
+                        required: true
+                    },
+                    contentType: {
+                        type: 'string',
+                        description: 'Content type: text or html',
+                        optional: true,
+                        enum: ['text', 'html'],
+                        default: 'text'
+                    }
+                };
+                toolDef.parameterMapping = { teamId: { inPath: true }, channelId: { inPath: true }, messageId: { inPath: true }, content: { inBody: true }, contentType: { inBody: true } };
+                break;
+
+            // Teams Meeting Tools
+            case 'createOnlineMeeting':
+            case 'createTeamsMeeting':
+                toolDef.description = 'Create a new Microsoft Teams online meeting. Returns meeting details including the join URL. Use this for ad-hoc meetings. For scheduled meetings with calendar invite, use createEvent with isOnlineMeeting: true instead.';
+                toolDef.endpoint = '/api/v1/teams/meetings';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    subject: {
+                        type: 'string',
+                        description: 'Subject/title of the meeting',
+                        required: true
+                    },
+                    startDateTime: {
+                        type: 'string',
+                        description: 'Meeting start time in ISO 8601 format (e.g., 2025-01-15T10:00:00Z)',
+                        required: true,
+                        format: 'date-time'
+                    },
+                    endDateTime: {
+                        type: 'string',
+                        description: 'Meeting end time in ISO 8601 format',
+                        required: true,
+                        format: 'date-time'
+                    },
+                    participants: {
+                        type: 'array',
+                        description: 'Array of participant email addresses',
+                        optional: true,
+                        items: { type: 'string', format: 'email' }
+                    },
+                    lobbyBypassSettings: {
+                        type: 'string',
+                        description: 'Who can bypass the lobby: everyone, organization, organizationAndFederated, organizer',
+                        optional: true,
+                        enum: ['everyone', 'organization', 'organizationAndFederated', 'organizer'],
+                        default: 'organization'
+                    }
+                };
+                break;
+
+            case 'getOnlineMeeting':
+                toolDef.description = 'Get details of a specific Teams online meeting by ID.';
+                toolDef.endpoint = '/api/v1/teams/meetings/:meetingId';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    meetingId: {
+                        type: 'string',
+                        description: 'The ID of the meeting to retrieve',
+                        required: true
+                    }
+                };
+                toolDef.parameterMapping = { meetingId: { inPath: true } };
+                break;
+
+            case 'getMeetingByJoinUrl':
+                toolDef.description = 'Find a Teams meeting by its join URL.';
+                toolDef.endpoint = '/api/v1/teams/meetings/findByJoinUrl';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    joinUrl: {
+                        type: 'string',
+                        description: 'The Teams meeting join URL',
+                        required: true
+                    }
+                };
+                toolDef.parameterMapping = { joinUrl: { inQuery: true } };
+                break;
+
+            case 'listOnlineMeetings':
+                toolDef.description = 'List the user\'s scheduled Teams online meetings.';
+                toolDef.endpoint = '/api/v1/teams/meetings';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    limit: {
+                        type: 'number',
+                        description: 'Maximum number of meetings to retrieve',
+                        optional: true,
+                        default: 20
+                    }
                 };
                 break;
 

@@ -10,6 +10,10 @@ const calendarControllerFactory = require('./controllers/calendar-controller.js'
 const filesControllerFactory = require('./controllers/files-controller.js');
 const peopleControllerFactory = require('./controllers/people-controller.cjs');
 const searchControllerFactory = require('./controllers/search-controller.cjs');
+const teamsControllerFactory = require('./controllers/teams-controller.cjs');
+const todoControllerFactory = require('./controllers/todo-controller.cjs');
+const contactsControllerFactory = require('./controllers/contacts-controller.cjs');
+const groupsControllerFactory = require('./controllers/groups-controller.cjs');
 const logController = require('./controllers/log-controller.cjs');
 const authController = require('./controllers/auth-controller.cjs');
 const deviceAuthController = require('./controllers/device-auth-controller.cjs');
@@ -322,6 +326,72 @@ function registerRoutes(router) {
     // TODO: Apply rate limiting
     searchRouter.post('/', placeholderRateLimit, searchController.search); // /v1/search
     v1.use('/search', searchRouter);
+
+    // --- Teams Router ---
+    const teamsController = teamsControllerFactory({ teamsModule: apiContext.teamsModule });
+    const teamsRouter = express.Router();
+    // Apply controller logger middleware
+    teamsRouter.use(controllerLogger());
+    // Chat routes
+    teamsRouter.get('/chats', teamsController.listChats); // /v1/teams/chats
+    teamsRouter.get('/chats/:chatId/messages', teamsController.getChatMessages); // /v1/teams/chats/:chatId/messages
+    teamsRouter.post('/chats/:chatId/messages', placeholderRateLimit, teamsController.sendChatMessage); // /v1/teams/chats/:chatId/messages
+    // Teams and channel routes
+    teamsRouter.get('/', teamsController.listJoinedTeams); // /v1/teams
+    teamsRouter.get('/:teamId/channels', teamsController.listTeamChannels); // /v1/teams/:teamId/channels
+    teamsRouter.get('/:teamId/channels/:channelId/messages', teamsController.getChannelMessages); // /v1/teams/:teamId/channels/:channelId/messages
+    teamsRouter.post('/:teamId/channels/:channelId/messages', placeholderRateLimit, teamsController.sendChannelMessage); // /v1/teams/:teamId/channels/:channelId/messages
+    teamsRouter.post('/:teamId/channels/:channelId/messages/:messageId/replies', placeholderRateLimit, teamsController.replyToMessage); // /v1/teams/:teamId/channels/:channelId/messages/:messageId/replies
+    // Meeting routes
+    teamsRouter.get('/meetings', teamsController.listOnlineMeetings); // /v1/teams/meetings
+    teamsRouter.post('/meetings', placeholderRateLimit, teamsController.createOnlineMeeting); // /v1/teams/meetings
+    teamsRouter.get('/meetings/findByJoinUrl', teamsController.getMeetingByJoinUrl); // /v1/teams/meetings/findByJoinUrl
+    teamsRouter.get('/meetings/:meetingId', teamsController.getOnlineMeeting); // /v1/teams/meetings/:meetingId
+    v1.use('/teams', teamsRouter);
+
+    // --- To-Do Router ---
+    const todoController = todoControllerFactory({ todoModule: apiContext.todoModule });
+    const todoRouter = express.Router();
+    // Apply controller logger middleware
+    todoRouter.use(controllerLogger());
+    // Task list routes
+    todoRouter.get('/lists', todoController.listTaskLists); // /v1/todo/lists
+    todoRouter.post('/lists', placeholderRateLimit, todoController.createTaskList); // /v1/todo/lists
+    todoRouter.get('/lists/:listId', todoController.getTaskList); // /v1/todo/lists/:listId
+    todoRouter.patch('/lists/:listId', placeholderRateLimit, todoController.updateTaskList); // /v1/todo/lists/:listId
+    todoRouter.delete('/lists/:listId', todoController.deleteTaskList); // /v1/todo/lists/:listId
+    // Task routes
+    todoRouter.get('/lists/:listId/tasks', todoController.listTasks); // /v1/todo/lists/:listId/tasks
+    todoRouter.post('/lists/:listId/tasks', placeholderRateLimit, todoController.createTask); // /v1/todo/lists/:listId/tasks
+    todoRouter.get('/lists/:listId/tasks/:taskId', todoController.getTask); // /v1/todo/lists/:listId/tasks/:taskId
+    todoRouter.patch('/lists/:listId/tasks/:taskId', placeholderRateLimit, todoController.updateTask); // /v1/todo/lists/:listId/tasks/:taskId
+    todoRouter.delete('/lists/:listId/tasks/:taskId', todoController.deleteTask); // /v1/todo/lists/:listId/tasks/:taskId
+    todoRouter.post('/lists/:listId/tasks/:taskId/complete', placeholderRateLimit, todoController.completeTask); // /v1/todo/lists/:listId/tasks/:taskId/complete
+    v1.use('/todo', todoRouter);
+
+    // --- Contacts Router ---
+    const contactsController = contactsControllerFactory({ contactsModule: apiContext.contactsModule });
+    const contactsRouter = express.Router();
+    // Apply controller logger middleware
+    contactsRouter.use(controllerLogger());
+    contactsRouter.get('/', contactsController.listContacts); // /v1/contacts
+    contactsRouter.get('/search', contactsController.searchContacts); // /v1/contacts/search
+    contactsRouter.post('/', placeholderRateLimit, contactsController.createContact); // /v1/contacts
+    contactsRouter.get('/:contactId', contactsController.getContact); // /v1/contacts/:contactId
+    contactsRouter.patch('/:contactId', placeholderRateLimit, contactsController.updateContact); // /v1/contacts/:contactId
+    contactsRouter.delete('/:contactId', contactsController.deleteContact); // /v1/contacts/:contactId
+    v1.use('/contacts', contactsRouter);
+
+    // --- Groups Router ---
+    const groupsController = groupsControllerFactory({ groupsModule: apiContext.groupsModule });
+    const groupsRouter = express.Router();
+    // Apply controller logger middleware
+    groupsRouter.use(controllerLogger());
+    groupsRouter.get('/', groupsController.listGroups); // /v1/groups
+    groupsRouter.get('/my', groupsController.listMyGroups); // /v1/groups/my
+    groupsRouter.get('/:groupId', groupsController.getGroup); // /v1/groups/:groupId
+    groupsRouter.get('/:groupId/members', groupsController.listGroupMembers); // /v1/groups/:groupId/members
+    v1.use('/groups', groupsRouter);
 
     // --- Log Router --- (No Auth required for logs)
     const logRouter = express.Router();

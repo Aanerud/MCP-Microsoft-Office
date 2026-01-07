@@ -1,777 +1,581 @@
 [![MseeP.ai Security Assessment Badge](https://mseep.net/pr/aanerud-mcp-microsoft-office-badge.png)](https://mseep.ai/app/aanerud-mcp-microsoft-office)
 
-# 🚀 MCP Microsoft Office - Enterprise-Grade Microsoft 365 Integration
+# MCP Microsoft Office
 
-**The most comprehensive, secure, and user-focused MCP server for Microsoft 365**
+**Connect Claude (or any AI) to your Microsoft 365 account**
 
-> Transform how you interact with Microsoft 365 through Claude and other LLMs with enterprise-grade security, comprehensive logging, and seamless multi-user support.
-
-## ✨ Why This Project is Special
-
-🔐 **User-Centric Security**: Every user gets their own isolated, encrypted data space  
-📊 **Enterprise Logging**: 4-tier comprehensive logging system with full observability  
-🛠️ **50+ Professional Tools**: Complete Microsoft 365 API coverage with validation  
-⚡ **Zero-Config Setup**: Automatic project initialization - just `npm install` and go!  
-🏢 **Multi-User Ready**: Session-based isolation with Microsoft authentication  
-🔧 **Developer Friendly**: Extensive debugging, monitoring, and error handling  
+Give AI assistants the ability to read your emails, manage your calendar, access your files, send Teams messages, and more - all through a secure, multi-user server that you control.
 
 ---
 
-## 🚀 Quick Start (Beginner-Friendly)
+## What Does This Project Do?
 
-### 1. **One-Command Setup** ⚡
+This project creates a bridge between AI assistants (like Claude) and Microsoft 365. When you ask Claude "What meetings do I have tomorrow?" or "Send an email to John about the project update" - this system makes it happen.
+
+**Key Benefits:**
+
+- **70 Tools** - Email, Calendar, Files, Teams, Contacts, To-Do, and more
+- **Multi-User** - One server can support your entire team, each with their own data
+- **Your Control** - Run locally on your computer or deploy to your own server
+- **Secure** - All tokens encrypted, no data stored on third-party servers
+- **Works with Any MCP Client** - Claude Desktop, or any other MCP-compatible AI
+
+---
+
+## How It Works (The Simple Version)
+
+```
+┌─────────────────┐                    ┌─────────────────┐                    ┌─────────────────┐
+│                 │    "Send email"    │                 │   "Here's the     │                 │
+│  Claude Desktop │ ◄────────────────► │   MCP Adapter   │   email data"     │   MCP Server    │
+│  (Your AI)      │                    │ (On Your PC)    │ ◄───────────────► │   (Local or     │
+│                 │                    │                 │                    │    Remote)      │
+└─────────────────┘                    └─────────────────┘                    └────────┬────────┘
+                                                                                       │
+                                                                                       │ Talks to
+                                                                                       │ Microsoft
+                                                                                       ▼
+                                                                             ┌─────────────────┐
+                                                                             │  Microsoft 365  │
+                                                                             │  (Your Account) │
+                                                                             └─────────────────┘
+```
+
+**Three Parts:**
+
+1. **Claude Desktop** - The AI you chat with
+2. **MCP Adapter** - A small program that runs on your computer (translates what Claude asks into web requests)
+3. **MCP Server** - Handles security and talks to Microsoft 365 (can run on your PC or a remote server)
+
+---
+
+## Why This Architecture?
+
+**Q: Why not connect Claude directly to Microsoft?**
+
+A: The Model Context Protocol (MCP) requires a local adapter to translate between Claude and any service. By separating the adapter from the server, you get:
+
+- **Flexibility**: Run the server locally for personal use, or deploy it for your whole team
+- **Security**: Your Microsoft credentials never leave your server
+- **Multi-User**: Multiple people can authenticate separately and use the same server
+- **Any AI Client**: The adapter pattern works with any MCP-compatible AI, not just Claude
+
+---
+
+## Quick Start Guide
+
+### Prerequisites
+
+Before you begin, you'll need:
+
+- **Node.js 18+** - [Download here](https://nodejs.org/)
+- **Claude Desktop** - [Download here](https://claude.ai/download)
+- **Azure App Registration** - Free, instructions below
+- **Microsoft 365 Account** - Work, school, or personal
+
+---
+
+### Step 1: Create Azure App Registration
+
+This tells Microsoft that your server is allowed to access your data.
+
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Navigate to **Microsoft Entra ID** → **App registrations**
+3. Click **+ New registration**
+4. Fill in:
+   - **Name**: `MCP-Microsoft-Office` (or whatever you like)
+   - **Supported account types**: Choose based on your needs
+   - **Redirect URI**: Leave blank for now
+5. Click **Register**
+6. **Copy these values** (you'll need them later):
+   - Application (client) ID
+   - Directory (tenant) ID
+
+#### Add API Permissions
+
+1. Go to **API permissions** → **+ Add a permission**
+2. Select **Microsoft Graph** → **Delegated permissions**
+3. Add these permissions:
+
+| Permission | What It's For |
+|------------|---------------|
+| `User.Read` | Read your profile |
+| `Mail.ReadWrite` | Read and send emails |
+| `Mail.Send` | Send emails |
+| `Calendars.ReadWrite` | Manage calendar |
+| `Files.ReadWrite` | Access OneDrive files |
+| `People.Read` | Find contacts |
+| `Tasks.ReadWrite` | Manage To-Do lists |
+| `Contacts.ReadWrite` | Manage contacts |
+| `Group.Read.All` | Read groups |
+| `Chat.ReadWrite` | Teams chat access |
+| `ChannelMessage.Send` | Send Teams messages |
+
+4. If you're an admin, click **Grant admin consent**
+
+#### Configure Authentication
+
+1. Go to **Authentication** → **+ Add a platform**
+2. Select **Web**
+3. Add Redirect URI:
+   - For local: `http://localhost:3000/api/auth/callback`
+   - For remote: `https://your-server.example.com/api/auth/callback`
+4. Under **Advanced settings**, set **Allow public client flows** to **Yes**
+5. Click **Save**
+
+---
+
+### Step 2: Set Up the Server
+
+#### Option A: Run Locally (Recommended for Getting Started)
+
 ```bash
+# Clone the project
 git clone https://github.com/Aanerud/MCP-Microsoft-Office.git
 cd MCP-Microsoft-Office
-npm install  # ✨ This does EVERYTHING automatically! ( i hope! )
-```
 
-**What happens automatically:**
-- ✅ Creates secure database with user isolation
-- ✅ Generates `.env` configuration file
-- ✅ Sets up all required directories
-- ✅ Initializes logging and monitoring systems
-- ✅ Prepares multi-user session management
+# Install dependencies (this also sets up the database)
+npm install
 
-### 2. **Configure Azure App Registration** 🔑
+# Edit the .env file with your Azure app details
+# Open .env and add:
+# MICROSOFT_CLIENT_ID=your-client-id-here
+# MICROSOFT_TENANT_ID=your-tenant-id-here
 
-You need to create an App Registration in Azure Entra ID (formerly Azure AD). Follow the detailed guide below.
-
-📋 **Azure Portal:** [App Registrations](https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
-
-After setup, edit the auto-generated `.env` file:
-```bash
-MICROSOFT_CLIENT_ID=your_client_id_here
-MICROSOFT_TENANT_ID=your_tenant_id_here
-```
-
-### 3. **Launch Your Server** 🎯
-```bash
-npm run dev:web  # Full development mode with comprehensive logging
-```
-
-🌐 **Access your server at:** `http://localhost:3000`
-
----
-
-## 🔐 Azure App Registration Setup
-
-This section provides detailed instructions for configuring your Azure Entra ID (Azure AD) App Registration.
-
-### Step 1: Create App Registration
-
-1. Go to [Azure Portal](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations**
-2. Click **+ New registration**
-3. Configure:
-   - **Name**: `MCP-Microsoft-Office` (or your preferred name)
-   - **Supported account types**: Choose based on your needs:
-     - *Single tenant*: Only your organization
-     - *Multitenant*: Any Microsoft Entra ID tenant
-   - **Redirect URI**: Leave blank for now (configure in Step 3)
-4. Click **Register**
-5. Note your **Application (client) ID** and **Directory (tenant) ID**
-
-### Step 2: Configure API Permissions
-
-Go to **API permissions** → **+ Add a permission** → **Microsoft Graph** → **Delegated permissions**
-
-#### Required Permissions
-
-| Permission | Description | Admin Consent Required |
-|------------|-------------|----------------------|
-| `User.Read` | Sign in and read user profile | No |
-| `Mail.ReadWrite` | Read and write user mail | Yes* |
-| `Mail.Send` | Send mail as user | Yes* |
-| `Calendars.ReadWrite` | Full access to user calendars | Yes* |
-| `Files.ReadWrite` | Full access to user files | Yes* |
-
-*Admin consent may be required in enterprise tenants
-
-#### Optional Permissions (for People API)
-
-| Permission | Description |
-|------------|-------------|
-| `People.Read` | Read users' relevant people lists |
-| `Contacts.Read` | Read user contacts |
-
-### Step 3: Configure Authentication
-
-Go to **Authentication** in the left sidebar:
-
-#### Add Platform
-1. Click **+ Add a platform**
-2. Select **Web** (NOT "Single-page application")
-3. Add Redirect URI:
-   ```
-   https://your-domain.com/api/auth/callback
-   ```
-   For local development:
-   ```
-   http://localhost:3000/api/auth/callback
-   ```
-4. Click **Configure**
-
-#### Enable Implicit Grant (optional)
-Under **Implicit grant and hybrid flows**:
-- ✅ Access tokens
-- ✅ ID tokens
-
-#### Advanced Settings
-Scroll down to **Advanced settings**:
-- **Allow public client flows**: Set to **Yes**
-  - This enables the Device Code Flow used by MCP adapters
-
-### Step 4: Admin Consent
-
-**Important for Enterprise Tenants:**
-
-If you see "Needs admin approval" when logging in, the permissions require admin consent.
-
-#### Option A: Grant Admin Consent (if you're an admin)
-1. Go to **API permissions**
-2. Click **Grant admin consent for [Your Organization]**
-3. Confirm the prompt
-
-#### Option B: Request Admin Consent (if you're not an admin)
-1. Contact your IT administrator
-2. Provide them the App Registration name/ID
-3. Ask them to grant admin consent for the listed permissions
-
-### Step 5: Environment Configuration
-
-Add to your `.env` file:
-```bash
-# From App Registration Overview page
-MICROSOFT_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-MICROSOFT_TENANT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-
-# Your server URL (must match redirect URI)
-MICROSOFT_REDIRECT_URI=https://your-domain.com/api/auth/callback
-```
-
-### Common Issues
-
-#### "AADSTS7000218: client_assertion or client_secret required"
-**Cause**: App is configured as Confidential Client
-**Fix**: Enable "Allow public client flows" in Authentication settings
-
-#### "Needs administrator approval"
-**Cause**: Permissions require admin consent in your tenant
-**Fix**: Have an admin grant consent, or use a personal Microsoft account for testing
-
-#### "Invalid redirect URI"
-**Cause**: Redirect URI mismatch between app registration and server
-**Fix**: Ensure the URI in Authentication matches your `MICROSOFT_REDIRECT_URI` exactly
-
-#### "Platform type mismatch"
-**Cause**: Using "Single-page application" instead of "Web"
-**Fix**: Remove SPA platform, add "Web" platform with same redirect URI
-
----
-
-## 🛠️ Complete Tool Arsenal 
-
-### 📧 **Email Management** (9 Tools)
-- `getMail` / `readMail` - Retrieve inbox messages with filtering
-- `sendMail` - Compose and send emails with attachments
-- `searchMail` - Powerful email search with KQL queries
-- `flagMail` - Flag/unflag important emails
-- `getEmailDetails` - View complete email content and metadata
-- `markAsRead` / `markEmailRead` - Update read status
-- `getMailAttachments` - Download email attachments
-- `addMailAttachment` - Add files to emails
-- `removeMailAttachment` - Remove email attachments
-
-### 📅 **Calendar Operations** (13 Tools)
-- `getCalendar` / `getEvents` - View upcoming events with filtering
-- `createEvent` - Schedule meetings with attendees and rooms
-- `updateEvent` - Modify existing calendar entries
-- `cancelEvent` - Remove events from calendar
-- `getAvailability` - Check free/busy times
-- `acceptEvent` - Accept meeting invitations
-- `tentativelyAcceptEvent` - Tentatively accept meetings
-- `declineEvent` - Decline meeting invitations
-- `findMeetingTimes` - Find optimal meeting slots
-- `getRooms` - Find available meeting rooms
-- `getCalendars` - List all user calendars
-- `addAttachment` - Add files to calendar events
-- `removeAttachment` - Remove event attachments
-
-### 📁 **File Management** (11 Tools)
-- `listFiles` - Browse OneDrive and SharePoint files
-- `searchFiles` - Find files by name or content
-- `downloadFile` - Retrieve file content
-- `uploadFile` - Add new files to cloud storage
-- `getFileMetadata` - View file properties and permissions
-- `getFileContent` - Read document contents
-- `setFileContent` / `updateFileContent` - Modify file contents
-- `createSharingLink` - Generate secure sharing URLs
-
----
-
-## 🔧 Advanced Configuration
-
-### **Environment Variables**
-```bash
-# Microsoft 365 Configuration
-MICROSOFT_CLIENT_ID=your_client_id
-MICROSOFT_TENANT_ID=your_tenant_id
-
-# Server Configuration
-PORT=3000
-NODE_ENV=development
-
-# Security
-MCP_ENCRYPTION_KEY=your_32_byte_encryption_key
-MCP_TOKEN_SECRET=your_jwt_secret
-
-# Database (Optional - defaults to SQLite)
-DATABASE_TYPE=sqlite  # or 'mysql', 'postgresql'
-DATABASE_URL=your_database_url
-
-# Logging
-LOG_LEVEL=info
-LOG_RETENTION_DAYS=30
-```
-
-### **Database Support**
-- ✅ **SQLite** (Default - Zero configuration)
-- ✅ **MySQL** (Production ready)
-- ✅ **PostgreSQL** (Enterprise grade)
-
-### **Backup & Migration**
-```bash
-# Backup user data
-npm run backup
-
-# Restore from backup
-npm run restore backup-file.sql
-
-# Database migration
-npm run migrate
-```
-
----
-
-## 💡 Real-World Usage Examples
-
-### **Natural Language Queries** 🗣️
-```text
-# Email Management
-"Show me unread emails from last week"
-"Send a meeting recap to the project team"
-"Find emails about the Q4 budget"
-
-# Calendar Operations  
-"What meetings do I have tomorrow?"
-"Schedule a 1-on-1 with Sarah next Tuesday at 2pm"
-"Find a time when John, Mary, and I are all free"
-
-# File Management
-"Find my PowerPoint presentations from last month"
-"Share the project proposal with the team"
-"Upload the latest budget spreadsheet"
-
-# People & Contacts
-"Find contacts in the marketing department"
-"Get John Smith's contact information"
-"Who are my most frequent email contacts?"
-```
-
-### **Advanced API Usage** 🔧
-```javascript
-// Direct API calls with full validation
-POST /api/v1/mail/send
-{
-    "to": ["colleague@company.com"],
-    "subject": "Project Update",
-    "body": "Here's the latest update...",
-    "attachments": [{
-        "name": "report.pdf",
-        "contentBytes": "base64_encoded_content"
-    }]
-}
-
-// Calendar event creation with attendees
-POST /api/v1/calendar/events
-{
-    "subject": "Team Standup",
-    "start": "2024-01-15T09:00:00Z",
-    "end": "2024-01-15T09:30:00Z",
-    "attendees": ["team@company.com"],
-    "location": "Conference Room A"
-}
-
-// File search with advanced filters
-GET /api/v1/files?query=presentation&limit=10&type=powerpoint
-```
-
----
-
-## 🚨 Troubleshooting & Support
-
-### **Common Issues & Solutions**
-
-#### **Database Issues** 🗄️
-```bash
-# Reset database completely
-npm run reset-db
-
-# Check database health
-curl http://localhost:3000/api/health
-
-# View database logs
-tail -f data/logs/database.log
-```
-
-#### **Authentication Problems** 🔐
-```bash
-# Check Microsoft 365 configuration
-echo $MICROSOFT_CLIENT_ID
-echo $MICROSOFT_TENANT_ID
-
-# Test authentication endpoint
-curl http://localhost:3000/api/auth/status
-
-# Clear data
-rm -rf data/*
-```
-
-#### **Permission Errors** 📁
-```bash
-# Fix directory permissions
-chmod -R 755 data/
-chown -R $USER:$USER data/
-
-# Check disk space
-df -h
-```
-
-### **Advanced Debugging** 🔍
-
-#### **Enable Comprehensive Logging**
-```bash
-# Full debug mode
+# Start the server
 npm run dev:web
-
-# Specific category logging
-DEBUG=mail,calendar npm run dev:web
-
-# View real-time logs
-curl http://localhost:3000/api/logs?limit=100&level=debug
 ```
 
-#### **Performance Monitoring**
+Your server is now running at `http://localhost:3000`
+
+#### Option B: Use a Remote Server
+
+If someone has deployed an MCP server for your team, you just need:
+- The server URL (e.g., `https://your-server.example.com`)
+- Skip to Step 3
+
+---
+
+### Step 3: Authenticate with Microsoft
+
+1. Open your browser and go to your server:
+   - Local: `http://localhost:3000`
+   - Remote: `https://your-server.example.com`
+2. Click **Login with Microsoft**
+3. Sign in with your Microsoft account
+4. Grant the requested permissions
+5. You'll be redirected back to the server
+
+---
+
+### Step 4: Get Your MCP Token
+
+After logging in:
+
+1. Click **Generate MCP Token** (or find it in the setup section)
+2. Copy the token - it looks like a long string starting with `eyJ...`
+3. Keep this token safe - it's your key to accessing the server
+
+---
+
+### Step 5: Set Up the MCP Adapter
+
+The adapter is a small file that Claude Desktop uses to communicate with the server.
+
+#### On macOS
+
 ```bash
-# Check system metrics
-curl http://localhost:3000/api/health
+# Create a folder for MCP adapters
+mkdir -p ~/mcp-adapters
 
-# Monitor API response times
-curl -w "@curl-format.txt" http://localhost:3000/api/mail
+# Copy the adapter (from the project you cloned, or download from your server)
+cp /path/to/MCP-Microsoft-Office/mcp-adapter.cjs ~/mcp-adapters/
+```
 
-# Database performance
-sqlite3 data/mcp.sqlite ".timer on" "SELECT COUNT(*) FROM user_logs;"
+#### On Windows
+
+```powershell
+# Create a folder for MCP adapters
+mkdir %USERPROFILE%\mcp-adapters
+
+# Copy the adapter
+copy C:\path\to\MCP-Microsoft-Office\mcp-adapter.cjs %USERPROFILE%\mcp-adapters\
 ```
 
 ---
 
-## 🎯 Production Deployment
+### Step 6: Configure Claude Desktop
 
-### **Environment Setup**
-```bash
-# Production environment variables
-NODE_ENV=production
-PORT=3000
-DATABASE_TYPE=postgresql
-DATABASE_URL=postgresql://user:pass@host:5432/mcpdb
-MCP_ENCRYPTION_KEY=your_32_byte_production_key
-LOG_LEVEL=info
-LOG_RETENTION_DAYS=90
-```
+Claude Desktop needs to know about your MCP adapter.
 
-### **Security Hardening**
-```bash
-# Generate secure encryption key
-openssl rand -hex 32
+#### On macOS
 
-# Set proper file permissions
-chmod 600 .env
-chmod 700 data/
+Edit: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
-# Enable HTTPS (recommended)
-HTTPS_ENABLED=true
-SSL_CERT_PATH=/path/to/cert.pem
-SSL_KEY_PATH=/path/to/key.pem
-```
-
-### **Monitoring & Alerts**
-```bash
-# Health check endpoint
-GET /api/health
-
-# User activity monitoring
-GET /api/logs?scope=user&limit=1000
-
-# System metrics
-GET /api/metrics
-```
-
----
-
-## 🏆 What Makes This Project Outstanding
-
-### **🔒 Enterprise-Grade Security**
-- **Zero Trust Architecture**: Every request is authenticated and authorized
-- **User Data Isolation**: Complete separation between users' data
-- **Encryption at Rest**: All sensitive data encrypted in database
-- **Session Security**: Secure session management with automatic cleanup
-- **Audit Trail**: Complete logging of all user activities
-
-### **📊 Comprehensive Observability**
-- **4-Tier Logging**: From development debugging to user activity tracking
-- **Real-Time Monitoring**: Live system health and performance metrics
-- **Error Tracking**: Structured error handling with full context
-- **Performance Analytics**: Response times, success rates, and usage patterns
-
-### **🛠️ Developer Experience**
-- **Zero Configuration**: Automatic setup with `npm install`
-- **Extensive Validation**: Joi schemas for all API endpoints
-- **Type Safety**: Comprehensive parameter validation and transformation
-- **Error Handling**: Graceful error handling with detailed diagnostics
-- **Development Tools**: Rich debugging and monitoring capabilities
-
-### **🏢 Production Ready**
-- **Multi-Database Support**: SQLite, MySQL, PostgreSQL
-- **Horizontal Scaling**: Session-based architecture supports load balancing
-- **Health Checks**: Comprehensive health monitoring endpoints
-- **Backup & Recovery**: Built-in backup and migration tools
-- **Security Hardening**: Production-ready security configurations
-
----
-
-## 📚 API Documentation
-
-### **Authentication Endpoints**
-```bash
-GET  /api/auth/status     # Check authentication status
-POST /api/auth/login      # Initiate Microsoft 365 login
-GET  /api/auth/callback   # OAuth callback handler
-POST /api/auth/logout     # Logout and cleanup session
-```
-
-### **Mail API Endpoints**
-```bash
-GET    /api/v1/mail              # Get inbox messages
-POST   /api/v1/mail/send         # Send email with attachments
-GET    /api/v1/mail/search       # Search emails
-PATCH  /api/v1/mail/:id/flag     # Flag/unflag email
-GET    /api/v1/mail/:id          # Get email details
-PATCH  /api/v1/mail/:id/read     # Mark as read/unread
-```
-
-### **Calendar API Endpoints**
-```bash
-GET    /api/v1/calendar          # Get calendar events
-POST   /api/v1/calendar/events   # Create new event
-PUT    /api/v1/calendar/events/:id # Update event
-DELETE /api/v1/calendar/events/:id # Cancel event
-GET    /api/v1/calendar/rooms    # Get available rooms
-```
-
-### **Files API Endpoints**
-```bash
-GET    /api/v1/files             # List files
-GET    /api/v1/files/search      # Search files
-POST   /api/v1/files/upload      # Upload file
-GET    /api/v1/files/:id         # Get file metadata
-GET    /api/v1/files/:id/content # Download file
-```
-
-### **People API Endpoints**
-```bash
-GET    /api/v1/people            # Get relevant people
-GET    /api/v1/people/search     # Search people
-GET    /api/v1/people/:id        # Get person details
-```
-
-### **System Endpoints**
-```bash
-GET    /api/health               # System health check
-GET    /api/logs                 # Get system/user logs
-POST   /api/v1/query             # Natural language query
-```
-
-#### **Comprehensive Audit Trail**
-- **Authentication Events**: Login, logout, token refresh activities
-- **Authorization Changes**: Permission grants and revocations
-- **Data Access**: File access, email reads, calendar views
-- **Administrative Actions**: Configuration changes and system updates
-
-### 🛡️ **Security & Compliance Benefits**
-
-#### **Enterprise Security Standards**
-- **Zero Trust Architecture**: Every operation logged and verified
-- **Audit Compliance**: Complete activity trails for compliance reporting
-- **Incident Response**: Detailed logs for security incident investigation
-- **User Accountability**: Clear attribution of all actions to authenticated users
-
-#### **Multi-Tenant Security**
-- **Data Isolation**: Complete separation between different user accounts
-- **Session Security**: Secure session management with proper cleanup
-- **Token Security**: JWT tokens with user binding and expiration
-- **Access Logging**: All access attempts logged with context
-
-### 🔍 **Log Categories & Structure**
-
-#### **Supported Log Categories**
-- `auth` - Authentication and authorization events
-- `mail` - Email operations and activities
-- `calendar` - Calendar events and scheduling
-- `files` - File access and management
-- `people` - Contact and directory operations
-- `graph` - Microsoft Graph API interactions
-- `storage` - Database and storage operations
-- `request` - HTTP request/response logging
-- `monitoring` - System monitoring and metrics
-
-#### **Log Entry Structure**
-```javascript
-{
-    "id": "log_entry_uuid",
-    "timestamp": "2025-07-06T17:04:23.131Z",
-    "level": "info",
-    "category": "mail",
-    "message": "Email sent successfully",
-    "context": {
-        "userId": "ms365:user@company.com",
-        "operation": "sendMail",
-        "duration": 1250,
-        "recipientCount": 3
-    },
-    "sessionId": "session_uuid",
-    "deviceId": "device_uuid"
-}
-```
-
-### 🚀 **Production-Ready Logging**
-
-This logging system is **production-tested** and provides:
-- **High Performance**: Minimal overhead on API operations
-- **Scalability**: Efficient storage and retrieval of large log volumes
-- **Reliability**: Robust error handling and fallback mechanisms
-- **Maintainability**: Clear separation of concerns and structured data
-
-The logging system ensures complete visibility into system operations while maintaining the highest standards of user privacy and data security.
-
-## Multi-User Architecture
-
-### System Overview
-
-The MCP server supports multiple concurrent users, each with their own authentication method and isolated data:
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         MCP Server (Remote or Local)                        │
-│                         Supports Multiple Users                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  User A (ms365:userA@company.com)    │  User B (ms365:userB@corp.com)       │
-│  └─ Auth: OAuth Flow                 │  └─ Auth: Enterprise Token           │
-│  └─ Tokens stored with userId        │  └─ Tokens stored with userId        │
-│                                                                             │
-│  MCP Clients for User A:             │  MCP Clients for User B:             │
-│  ├─ Claude Desktop (deviceId: xxx)   │  ├─ Claude Desktop (deviceId: aaa)   │
-│  └─ Other MCP Client (deviceId: yyy) │  └─ Other MCP Client (deviceId: bbb) │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### Data Flow Architecture
-
-```
-┌──────────────┐     MCP Bearer Token      ┌────────────┐    MS Graph Token    ┌───────────────┐
-│  MCP Client  │ ◄─────────────────────► │ MCP Server │ ◄─────────────────► │ Microsoft 365 │
-│(Claude, etc.)│   (Transport Security)   │            │   (API Access)       │  Graph API    │
-└──────────────┘                          └────────────┘                      └───────────────┘
-```
-
-**Two distinct tokens serve different purposes:**
-
-| Token | Purpose | Contains | Used For |
-|-------|---------|----------|----------|
-| **MCP Bearer Token** | Transport security | `userId` + `deviceId` | MCP Client ↔ MCP Server communication |
-| **Microsoft Graph Token** | API access | Microsoft identity | MCP Server ↔ Microsoft 365 API calls |
-
-### Key Identifiers
-
-- **`userId`** (`ms365:email@domain.com`): Identifies the Microsoft 365 user. Used for storing and retrieving Microsoft Graph tokens.
-- **`deviceId`** (`mcp-token-xxx-abc`): Identifies the specific MCP client instance. Used for tracking, auditing, and client management.
-
----
-
-## Authentication Methods
-
-The server supports **two authentication methods** for obtaining Microsoft Graph tokens:
-
-### Method 1: OAuth Authorization Code Flow
-
-Traditional web-based authentication where users log in through Microsoft's OAuth flow.
-
-**How it works:**
-1. User visits the MCP server web UI
-2. Clicks "Login with Microsoft"
-3. Redirected to Microsoft login page
-4. After authentication, redirected back to `/api/auth/callback`
-5. Server stores tokens and manages automatic refresh
-
-**Best for:**
-- Interactive web sessions
-- Development and testing
-- Users who can access a browser
-
-### Method 2: Enterprise Token Flow (Manual JWT)
-
-Direct injection of a pre-obtained Microsoft Graph access token.
-
-**How it works:**
-1. User obtains a Microsoft Graph token from an enterprise tool (Windows SSO, PowerShell, etc.)
-2. Pastes the token in the "Enterprise Token" field in the web UI
-3. Server validates and stores the token
-4. Token is used directly for Graph API calls (no refresh - must paste new token when expired)
-
-**Best for:**
-- Enterprise environments with Windows SSO
-- Automated scripts and tools
-- Environments where OAuth redirect isn't practical
-
-### Authentication Flow Summary
-
-| Step | OAuth Flow | Enterprise Token Flow |
-|------|------------|----------------------|
-| 1 | Click "Login with Microsoft" | Paste token in "Enterprise Token" field |
-| 2 | Complete Microsoft login | Click "Submit Token" |
-| 3 | Server receives tokens via callback | Server validates and stores token |
-| 4 | Generate MCP Bearer token | Generate MCP Bearer token |
-| 5 | Configure MCP client | Configure MCP client |
-
-Both methods result in the same MCP Bearer token format for client configuration.
-
----
-
-## Connecting MCP Clients
-
-### Step 1: Authenticate on the Web UI
-
-1. Go to your MCP server URL (e.g., `https://your-server.com` or `http://localhost:3000`)
-2. Choose authentication method:
-   - **OAuth**: Click "Login with Microsoft" and complete the flow
-   - **Enterprise Token**: Paste your Microsoft Graph token and click "Submit"
-
-### Step 2: Generate MCP Bearer Token
-
-After authentication, click "Generate MCP Token" to get your configuration.
-
-### Step 3: Configure Claude Desktop
-
-Copy the generated configuration to your Claude Desktop config file:
-
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-Example configuration:
 ```json
 {
   "mcpServers": {
-    "microsoft-365": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://your-server.com/api/mcp/sse",
-        "--header",
-        "Authorization:${MCP_AUTH}"
-      ],
+    "microsoft365": {
+      "command": "node",
+      "args": ["/Users/YOUR_USERNAME/mcp-adapters/mcp-adapter.cjs"],
       "env": {
-        "MCP_AUTH": "Bearer eyJhbGc..."
+        "MCP_SERVER_URL": "http://localhost:3000",
+        "MCP_BEARER_TOKEN": "paste-your-token-here"
       }
     }
   }
 }
 ```
 
-### Step 4: Restart Claude Desktop
+**Replace:**
+- `YOUR_USERNAME` with your macOS username
+- `paste-your-token-here` with the token from Step 4
+- Change `MCP_SERVER_URL` if using a remote server
 
-Restart Claude Desktop to load the new configuration. You should see the Microsoft 365 tools available.
+#### On Windows
 
----
+Edit: `%APPDATA%\Claude\claude_desktop_config.json`
 
-## User Isolation & Session Management
-
-Each user's data is completely isolated through the userId-based architecture:
-
-- **Token Storage**: All tokens stored with `userId` as the key prefix
-- **Session Isolation**: Each user has their own session context
-- **Audit Logging**: All operations logged with `userId` for accountability
-
-```javascript
-// Token storage keys use userId for isolation
-`ms365:user@company.com:external-graph-token`  // Enterprise token
-`ms365:user@company.com:token-source`          // Auth method tracking
-`ms365:user@company.com:ms-access-token`       // OAuth token
+```json
+{
+  "mcpServers": {
+    "microsoft365": {
+      "command": "node",
+      "args": ["C:\\Users\\YOUR_USERNAME\\mcp-adapters\\mcp-adapter.cjs"],
+      "env": {
+        "MCP_SERVER_URL": "http://localhost:3000",
+        "MCP_BEARER_TOKEN": "paste-your-token-here"
+      }
+    }
+  }
+}
 ```
 
 ---
 
-## 🤝 Contributing & Support
+### Step 7: Restart Claude Desktop
 
-### **Contributing Guidelines**
-1. **Fork the repository** and create a feature branch
-2. **Follow the logging patterns** - All new code must implement the 4-tier logging system
-3. **Add comprehensive tests** for new functionality
-4. **Update documentation** for any API changes
-5. **Ensure security** - All user data must be properly isolated
+1. Quit Claude Desktop completely
+2. Start it again
+3. You should see the Microsoft 365 tools available
 
-### **Development Setup**
+**Test it:** Ask Claude "What emails do I have?" or "What's on my calendar today?"
+
+---
+
+## Understanding the Token System
+
+This project uses **two different tokens** for security:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         TOKEN TYPES                                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────────────────┐         ┌─────────────────────────┐           │
+│  │   MCP Bearer Token      │         │   Microsoft Graph Token │           │
+│  │   (You manage this)     │         │   (Server manages this) │           │
+│  ├─────────────────────────┤         ├─────────────────────────┤           │
+│  │ • Lasts 24h to 30 days  │         │ • Lasts 1 hour          │           │
+│  │ • Goes in Claude config │         │ • Auto-refreshed        │           │
+│  │ • Identifies YOU        │         │ • Talks to Microsoft    │           │
+│  └───────────┬─────────────┘         └───────────┬─────────────┘           │
+│              │                                   │                          │
+│              ▼                                   ▼                          │
+│     Claude ←→ Adapter ←→ Server         Server ←→ Microsoft 365            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**MCP Bearer Token** (the one you copied):
+- Proves to the server that requests are from you
+- You put this in Claude's configuration
+- If it expires, generate a new one from the web UI
+
+**Microsoft Graph Token** (handled automatically):
+- The server uses this to talk to Microsoft
+- Automatically refreshed - you never see it
+- Stored encrypted on the server
+
+---
+
+## Multi-User Support
+
+This server can support multiple users at once, each with completely separate data:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        ONE SERVER, MANY USERS                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Alice (alice@company.com)           │  Bob (bob@company.com)               │
+│  ├─ Her own Microsoft tokens         │  ├─ His own Microsoft tokens         │
+│  ├─ Her own session                  │  ├─ His own session                  │
+│  ├─ Her own activity logs            │  ├─ His own activity logs            │
+│  │                                   │  │                                   │
+│  └─ Claude Desktop (her laptop)      │  └─ Claude Desktop (his PC)          │
+│                                                                             │
+│  ═══════════════════════════════════════════════════════════════════════   │
+│                      COMPLETE DATA ISOLATION                                 │
+│                 Alice can NEVER see Bob's data                              │
+│                 Bob can NEVER see Alice's data                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**How it works:**
+- Each user logs in with their own Microsoft account
+- Each user gets their own MCP token
+- All data is tagged with the user's identity
+- The database enforces isolation at every query
+
+---
+
+## Available Tools (70 Total)
+
+### Email (9 tools)
+| Tool | Description |
+|------|-------------|
+| `getInbox` | Read your inbox messages |
+| `sendEmail` | Send an email |
+| `searchEmails` | Search for specific emails |
+| `flagEmail` | Flag/unflag an email |
+| `getEmailDetails` | Get full email content |
+| `markAsRead` | Mark email as read/unread |
+| `getMailAttachments` | Get email attachments |
+| `addMailAttachment` | Add attachment to email |
+| `removeMailAttachment` | Remove attachment from email |
+
+### Calendar (13 tools)
+| Tool | Description |
+|------|-------------|
+| `getEvents` | Get calendar events |
+| `createEvent` | Create a new meeting |
+| `updateEvent` | Modify an existing event |
+| `cancelEvent` | Cancel/delete an event |
+| `getAvailability` | Check free/busy times |
+| `findMeetingTimes` | Find optimal meeting slots |
+| `acceptEvent` | Accept a meeting invite |
+| `declineEvent` | Decline a meeting invite |
+| `tentativelyAcceptEvent` | Tentatively accept |
+| `getCalendars` | List all calendars |
+| `getRooms` | Find meeting rooms |
+| `addAttachment` | Add attachment to event |
+| `removeAttachment` | Remove event attachment |
+
+### Files (11 tools)
+| Tool | Description |
+|------|-------------|
+| `listFiles` | List OneDrive files |
+| `searchFiles` | Search for files |
+| `downloadFile` | Download a file |
+| `uploadFile` | Upload a new file |
+| `getFileMetadata` | Get file info |
+| `getFileContent` | Read file contents |
+| `setFileContent` | Write file contents |
+| `updateFileContent` | Update existing file |
+| `createSharingLink` | Create share link |
+| `getSharingLinks` | List share links |
+| `removeSharingPermission` | Remove sharing |
+
+### Teams (12 tools)
+| Tool | Description |
+|------|-------------|
+| `listChats` | List Teams chats |
+| `getChat` | Get chat details |
+| `listChatMessages` | Read chat messages |
+| `sendChatMessage` | Send a chat message |
+| `listTeams` | List your teams |
+| `getTeam` | Get team details |
+| `listChannels` | List team channels |
+| `getChannel` | Get channel details |
+| `listChannelMessages` | Read channel messages |
+| `sendChannelMessage` | Post to a channel |
+| `createOnlineMeeting` | Create Teams meeting |
+| `getOnlineMeeting` | Get meeting details |
+
+### People (3 tools)
+| Tool | Description |
+|------|-------------|
+| `find` | Find people by name |
+| `search` | Search directory |
+| `getRelevantPeople` | Get frequent contacts |
+
+### Search (1 tool)
+| Tool | Description |
+|------|-------------|
+| `search` | Unified search across Microsoft 365 |
+
+### To-Do (11 tools)
+| Tool | Description |
+|------|-------------|
+| `listTaskLists` | List all task lists |
+| `getTaskList` | Get a specific list |
+| `createTaskList` | Create new list |
+| `updateTaskList` | Rename a list |
+| `deleteTaskList` | Delete a list |
+| `listTasks` | List tasks in a list |
+| `getTask` | Get task details |
+| `createTask` | Create a new task |
+| `updateTask` | Update a task |
+| `deleteTask` | Delete a task |
+| `completeTask` | Mark task complete |
+
+### Contacts (6 tools)
+| Tool | Description |
+|------|-------------|
+| `listContacts` | List your contacts |
+| `getContact` | Get contact details |
+| `createContact` | Add new contact |
+| `updateContact` | Update contact info |
+| `deleteContact` | Remove a contact |
+| `searchContacts` | Search contacts |
+
+### Groups (4 tools)
+| Tool | Description |
+|------|-------------|
+| `listGroups` | List Microsoft 365 groups |
+| `getGroup` | Get group details |
+| `listGroupMembers` | List group members |
+| `listMyGroups` | List groups you're in |
+
+---
+
+## Environment Variables
+
+Configure these in your `.env` file:
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `MICROSOFT_CLIENT_ID` | Yes | Azure App Client ID | - |
+| `MICROSOFT_TENANT_ID` | Yes | Azure Tenant ID | `common` |
+| `MICROSOFT_REDIRECT_URI` | No | OAuth callback URL | `http://localhost:3000/api/auth/callback` |
+| `PORT` | No | Server port | `3000` |
+| `NODE_ENV` | No | Environment mode | `development` |
+| `MCP_TOKEN_SECRET` | No | Secret for MCP tokens | Auto-generated |
+| `MCP_TOKEN_EXPIRY` | No | Token expiry in seconds | `2592000` (30 days) |
+| `DATABASE_TYPE` | No | Database type | `sqlite` |
+
+---
+
+## Troubleshooting
+
+### "AADSTS7000218: client_assertion or client_secret required"
+
+**Problem:** Azure thinks you need a client secret.
+
+**Fix:**
+1. Go to Azure Portal → Your App → Authentication
+2. Under "Advanced settings", set **Allow public client flows** to **Yes**
+3. Click Save
+
+### "Needs administrator approval"
+
+**Problem:** Your organization requires admin consent for the permissions.
+
+**Fix:**
+- Ask your IT admin to grant consent, OR
+- Use a personal Microsoft account for testing
+
+### "Invalid redirect URI"
+
+**Problem:** The callback URL doesn't match exactly.
+
+**Fix:**
+1. Go to Azure Portal → Your App → Authentication
+2. Check that the Redirect URI matches exactly:
+   - Local: `http://localhost:3000/api/auth/callback`
+   - Remote: `https://your-server.example.com/api/auth/callback`
+
+### "Connection refused" or "ECONNREFUSED"
+
+**Problem:** The server isn't running.
+
+**Fix:**
+1. Make sure you started the server: `npm run dev:web`
+2. Check the server is on the correct port
+3. Check firewall settings
+
+### "401 Unauthorized"
+
+**Problem:** Your MCP token expired.
+
+**Fix:**
+1. Go to the web UI
+2. Log in again if needed
+3. Generate a new MCP token
+4. Update Claude Desktop's config with the new token
+5. Restart Claude Desktop
+
+### Claude doesn't show Microsoft 365 tools
+
+**Fix:**
+1. Make sure the config file is valid JSON (no trailing commas!)
+2. Check the adapter path is correct for your OS
+3. Make sure Node.js is installed: `node --version`
+4. Restart Claude Desktop completely
+
+---
+
+## Security
+
+- **Encrypted Storage**: All Microsoft tokens are encrypted at rest using AES-256
+- **No Client Secrets**: Uses public client flow (safer for desktop apps)
+- **Token Isolation**: Each user's tokens are stored separately and encrypted with different keys
+- **Session Expiry**: Sessions automatically expire after 24 hours
+- **HTTPS**: Use HTTPS for production deployments
+
+---
+
+## For Developers
+
+### Project Structure
+
+```
+MCP-Microsoft-Office/
+├── mcp-adapter.cjs          # The adapter that runs locally
+├── src/
+│   ├── api/                 # Express routes and controllers
+│   ├── auth/                # MSAL authentication
+│   ├── core/                # Services (cache, events, storage)
+│   ├── graph/               # Microsoft Graph API services
+│   └── modules/             # Feature modules (mail, calendar, etc.)
+├── public/                  # Web UI
+└── data/                    # SQLite database (created on first run)
+```
+
+### Running Tests
+
 ```bash
-# Clone and setup development environment
-git clone https://github.com/Aanerud/MCP-Microsoft-Office.git
-cd MCP-Microsoft-Office
-npm install
-
-# Run in development mode with full logging
-npm run dev:web
-
-# Run tests
 npm test
-
-# Check code quality
-npm run lint
 ```
 
-### **Support & Community**
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/Aanerud/MCP-Microsoft-Office/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/Aanerud/MCP-Microsoft-Office/discussions)
+### Development Mode
+
+```bash
+npm run dev:web    # Start server with hot reload
+```
 
 ---
 
-## 📄 License
+## Contributing
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Contributions are welcome! Please:
 
----
-
-## 🙏 Acknowledgments
-
-- **Microsoft Graph API** for providing comprehensive Microsoft 365 integration
-- **Model Context Protocol (MCP)** for the innovative LLM integration framework
-- **Claude AI** for inspiring advanced AI-human collaboration
-- **Open Source Community** for the amazing tools and libraries that make this possible
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
 ---
 
-<div align="center">
+## License
 
-**⭐ Star this repository if you find it useful!**
+MIT License - see [LICENSE](LICENSE) file for details.
 
-**🔗 Share with your team and help them work smarter with Microsoft 365!**
+---
 
-</div>
+## Acknowledgments
+
+- [Microsoft Graph API](https://developer.microsoft.com/en-us/graph) - The API that powers this integration
+- [Model Context Protocol](https://modelcontextprotocol.io/) - The protocol that enables AI tool integration
+- [Claude](https://claude.ai/) - The AI assistant this was built for
