@@ -139,11 +139,13 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
 
     // Comprehensive tool alias map for consistent module and method routing
     const toolAliases = {
+        // Unified search tool (replaces searchMail, searchFiles)
+        search: { moduleName: 'search', methodName: 'search' },
+
         // Mail module tools
         getMail: { moduleName: 'mail', methodName: 'getInbox' },
         readMail: { moduleName: 'mail', methodName: 'getInbox' },
         sendMail: { moduleName: 'mail', methodName: 'sendEmail' },
-        searchMail: { moduleName: 'mail', methodName: 'searchEmails' },
         flagMail: { moduleName: 'mail', methodName: 'flagEmail' },
         getMailDetails: { moduleName: 'mail', methodName: 'getEmailDetails' },
         markMailRead: { moduleName: 'mail', methodName: 'markAsRead' },
@@ -167,7 +169,6 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
         
         // Files module tools
         listFiles: { moduleName: 'files', methodName: 'listFiles' },
-        searchFiles: { moduleName: 'files', methodName: 'searchFiles' },
         downloadFile: { moduleName: 'files', methodName: 'downloadFile' },
         uploadFile: { moduleName: 'files', methodName: 'uploadFile' },
         getFileMetadata: { moduleName: 'files', methodName: 'getFileMetadata' },
@@ -315,22 +316,74 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
                     }
                 };
                 break;
-            case 'searchEmails':
-            case 'searchMail':
-                toolDef.description = 'Search emails using Microsoft Graph KQL (Keyword Query Language) syntax';
-                toolDef.endpoint = '/api/v1/mail/search';
+            case 'search':
+                toolDef.description = `Unified search across Microsoft 365: emails, calendar events, files, and people.
+
+USE THIS TOOL when the user wants to find "everything about" a person, topic, or project. A single search returns results from ALL entity types at once.
+
+PERSON DISAMBIGUATION WORKFLOW:
+When searching for a person's name (e.g., "Krister"), you may get multiple matches in the 'person' results.
+1. First search with the name to identify the right person (check jobTitle, department, email)
+2. Then do a targeted search using their UPN/email for all their content:
+   → "from:kristerm@microsoft.com OR to:kristerm@microsoft.com"
+
+EXAMPLES:
+- "Find everything about Krister" → Step 1: query: "Krister" to find the person
+  → Step 2: query: "from:kristerm@microsoft.com OR to:kristerm@microsoft.com" for all communications
+- "What do we have on Project X?" → query: "Project X" (searches all content)
+- "Files shared by John" → query: "author:john@company.com", entityTypes: ["driveItem"]
+
+⚠️ FOR DATE-BASED CALENDAR QUERIES: Use getEvents instead!
+- "Today's meetings" → Use getEvents (supports date filtering)
+- "Events this week" → Use getEvents (supports date filtering)
+- "Meetings about budget" → Use search with entityTypes: ["event"] (keyword search only)
+
+KQL QUERY SYNTAX:
+- Simple search: "Krister" or "project budget" (searches all fields)
+- From person: "from:john@company.com" or "to:john@company.com"
+- Subject: "subject:quarterly report"
+- Has attachments: "hasAttachments:true"
+- Combine: "from:boss@company.com AND subject:urgent"
+- File type: "filetype:pdf"
+- Author: "author:john@company.com"
+
+ENTITY TYPES (default: all):
+- message: emails (from:, to:, subject:, body:, hasAttachments:)
+- event: calendar events (keyword search only - use getEvents for dates)
+- driveItem: files (filename:, filetype:, path:, author:)
+- person: people directory (displayName, email, jobTitle)`;
+                toolDef.endpoint = '/api/v1/search';
+                toolDef.method = 'POST';
                 toolDef.parameters = {
-                    query: { 
-                        type: 'string', 
-                        description: 'KQL search query string. Examples: "from:user@domain.com", "subject:meeting", "from:john AND subject:report", "hasattachments:true". Do not wrap the entire query in quotes.', 
-                        required: true,
-                        aliases: ['q'] // Support both 'query' and 'q' parameters
+                    query: {
+                        type: 'string',
+                        description: 'Search query. Use simple terms like "Krister" for broad search, or KQL syntax like "from:email@domain.com" for specific filters.',
+                        required: true
                     },
-                    limit: { 
-                        type: 'number', 
-                        description: 'Maximum number of results to return', 
+                    entityTypes: {
+                        type: 'array',
+                        description: 'Entity types to search. Omit to search ALL types (recommended for "find everything about X" queries). Options: message, event, driveItem, person.',
                         optional: true,
-                        default: 20
+                        default: ['message', 'event', 'driveItem', 'person'],
+                        items: { type: 'string', enum: ['message', 'chatMessage', 'event', 'driveItem', 'person', 'site', 'list', 'listItem'] }
+                    },
+                    limit: {
+                        type: 'number',
+                        description: 'Maximum results per entity type (max 25). Default: 10.',
+                        optional: true,
+                        default: 10
+                    },
+                    includeAnswers: {
+                        type: 'boolean',
+                        description: 'Include enterprise knowledge answers (acronyms, bookmarks, Q&A). Returns definitions for company-specific terms.',
+                        optional: true,
+                        default: false
+                    },
+                    enableSpellingModification: {
+                        type: 'boolean',
+                        description: 'Auto-correct typos in search query. When true, misspelled words are automatically corrected.',
+                        optional: true,
+                        default: false
                     }
                 };
                 break;
@@ -438,18 +491,29 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
             // Calendar tools
             case 'getEvents':
             case 'getCalendar':
-                toolDef.description = 'Fetch calendar events. Use start and end dates to see recurring meeting instances.';
+                toolDef.description = `Get calendar events by DATE RANGE. This is the tool for "today's meetings", "this week's events", etc.
+
+USE THIS TOOL FOR:
+- "What's on my calendar today?" → start: today, end: today
+- "Show me this week's meetings" → start: Monday, end: Friday
+- "My schedule for tomorrow" → start: tomorrow, end: tomorrow
+
+USE 'search' TOOL INSTEAD FOR:
+- "Find meetings about budget" → search with entityTypes: ["event"]
+- "Meetings with Krister" → search with query: "organizer:kristerm@microsoft.com"
+
+This endpoint uses Microsoft Graph's calendarView which properly expands recurring events within the date range.`;
                 toolDef.endpoint = '/api/v1/calendar';
                 toolDef.parameters = {
                     start: {
                         type: 'string',
-                        description: 'Start date (YYYY-MM-DD)',
+                        description: 'Start date (YYYY-MM-DD). Required for date-based queries like "today" or "this week".',
                         optional: true,
                         format: 'date'
                     },
                     end: {
                         type: 'string',
-                        description: 'End date (YYYY-MM-DD)',
+                        description: 'End date (YYYY-MM-DD). Required for date-based queries.',
                         optional: true,
                         format: 'date'
                     },
@@ -947,21 +1011,6 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
                     parentId: { inQuery: true }
                 };
                 break;
-            case 'searchFiles':
-                toolDef.description = 'Search for files by name or content. This tool must be used to find files before performing operations on them.';
-                toolDef.endpoint = '/api/v1/files/search';
-                toolDef.method = 'GET';
-                toolDef.parameters = {
-                    q: { 
-                        type: 'string', 
-                        description: 'Search query to find files by name or content',
-                        required: true
-                    }
-                };
-                toolDef.parameterMapping = {
-                    q: { inQuery: true }
-                };
-                break;
             case 'uploadFile':
                 toolDef.description = 'Upload a file to OneDrive or SharePoint';
                 toolDef.endpoint = '/api/v1/files/upload';
@@ -1010,13 +1059,13 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
                 };
                 break;
             case 'getFileContent':
-                toolDef.description = 'Get the content of a specific file. Use searchFiles first to find the file ID.';
+                toolDef.description = 'Get the content of a specific file. Use search with entityTypes: ["driveItem"] or listFiles to find the file ID.';
                 toolDef.endpoint = '/api/v1/files/content';
                 toolDef.method = 'GET';
                 toolDef.parameters = {
                     id: { 
                         type: 'string', 
-                        description: 'ID of the file to get content for (required, must be obtained from searchFiles or listFiles)',
+                        description: 'ID of the file to get content for (required, must be obtained from search or listFiles)',
                         required: true
                     }
                 };
@@ -1227,96 +1276,8 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
                 };
                 break;
 
-            // Search tools
-            case 'search':
-                toolDef.description = `Unified search across Microsoft 365: emails, calendar events, files, and people.
-
-KQL QUERY SYNTAX (translate user requests to these patterns):
-- Simple search: "project budget" (searches all fields)
-- From specific person: "from:john@company.com"
-- Subject contains: "subject:quarterly report"
-- Has attachments: "hasAttachments:true"
-- Date range: "received>=2024-01-01 AND received<=2024-01-31"
-- Combine: "from:boss@company.com AND subject:urgent"
-- File type: "filetype:pdf"
-- In folder: "path:Documents/Projects"
-
-ENTITY TYPES:
-- message: emails (supports from:, to:, subject:, body:, hasAttachments:)
-- event: calendar events (supports subject:, organizer:, location:)
-- driveItem: files (supports filename:, filetype:, path:, author:)
-- person: people (searches displayName and email)
-
-For recurring calendar events or availability checks, use getCalendar instead.`;
-                toolDef.endpoint = '/api/v1/search';
-                toolDef.method = 'POST';
-                toolDef.parameters = {
-                    query: {
-                        type: 'string',
-                        description: 'KQL query string. Translate natural language to KQL syntax above.',
-                        required: true
-                    },
-                    entityTypes: {
-                        type: 'array',
-                        description: 'Entity types to search: message, event, driveItem, person. Default: all types.',
-                        items: { enum: ['message', 'event', 'driveItem', 'person'] },
-                        optional: true,
-                        default: ['message', 'event', 'driveItem', 'person']
-                    },
-                    limit: {
-                        type: 'number',
-                        description: 'Results per entity type (max 25)',
-                        optional: true,
-                        default: 10
-                    },
-                    from: {
-                        type: 'number',
-                        description: 'Pagination offset for results',
-                        optional: true,
-                        default: 0
-                    }
-                };
-                break;
-            case 'searchMessages':
-                toolDef.description = 'Search emails only. Use KQL syntax: from:, to:, subject:, body:, hasAttachments:, received>=date';
-                toolDef.endpoint = '/api/v1/search';
-                toolDef.method = 'POST';
-                toolDef.parameters = {
-                    query: { type: 'string', description: 'KQL query for emails', required: true },
-                    entityTypes: { type: 'array', description: 'Fixed to message', optional: true, default: ['message'], hidden: true },
-                    limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
-                };
-                break;
-            case 'searchEvents':
-                toolDef.description = 'Search calendar events only. Use KQL syntax: subject:, organizer:, location:. For recurring events, use getCalendar with date range.';
-                toolDef.endpoint = '/api/v1/search';
-                toolDef.method = 'POST';
-                toolDef.parameters = {
-                    query: { type: 'string', description: 'KQL query for events', required: true },
-                    entityTypes: { type: 'array', description: 'Fixed to event', optional: true, default: ['event'], hidden: true },
-                    limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
-                };
-                break;
-            case 'searchFiles':
-                toolDef.description = 'Search files only. Use KQL syntax: filename:, filetype:pdf, path:, author:, created>=date';
-                toolDef.endpoint = '/api/v1/search';
-                toolDef.method = 'POST';
-                toolDef.parameters = {
-                    query: { type: 'string', description: 'KQL query for files', required: true },
-                    entityTypes: { type: 'array', description: 'Fixed to driveItem', optional: true, default: ['driveItem'], hidden: true },
-                    limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
-                };
-                break;
-            case 'searchPeople':
-                toolDef.description = 'Search people in the organization. Searches displayName and email.';
-                toolDef.endpoint = '/api/v1/search';
-                toolDef.method = 'POST';
-                toolDef.parameters = {
-                    query: { type: 'string', description: 'Search query for people', required: true },
-                    entityTypes: { type: 'array', description: 'Fixed to person', optional: true, default: ['person'], hidden: true },
-                    limit: { type: 'number', description: 'Max results (max 25)', optional: true, default: 10 }
-                };
-                break;
+            // NOTE: 'search' case is defined earlier in this switch (line ~319)
+            // Legacy search tools (searchMail, searchFiles) removed - use unified 'search' tool with entityTypes parameter
 
             // ================================================================
             // TEAMS MODULE TOOLS

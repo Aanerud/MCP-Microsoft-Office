@@ -55,9 +55,9 @@ const schemas = {
     search: Joi.object({
         query: Joi.string().min(1).max(500).required(),
         entityTypes: Joi.array()
-            .items(Joi.string().valid('message', 'event', 'driveItem', 'person'))
+            .items(Joi.string().valid('message', 'chatMessage', 'event', 'driveItem', 'person', 'site', 'list', 'listItem'))
             .min(1)
-            .max(4)
+            .max(8)
             .optional()
             .default(['message', 'event', 'driveItem', 'person']),
         limit: Joi.number().integer().min(1).max(25).optional().default(10),

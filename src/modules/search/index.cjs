@@ -98,6 +98,9 @@ const SearchModule = {
    * @param {Array<string>} [options.entityTypes] - Entity types to search
    * @param {number} [options.limit] - Max results
    * @param {number} [options.from] - Pagination offset
+   * @param {boolean} [options.enableSpellingSuggestion] - Return spelling suggestions
+   * @param {boolean} [options.enableSpellingModification] - Auto-correct query typos
+   * @param {boolean} [options.includeAnswers] - Include acronym, bookmark, qna results
    * @param {object} req - Express request
    * @param {string} userId - User ID
    * @param {string} sessionId - Session ID
@@ -113,6 +116,7 @@ const SearchModule = {
         query: options.query?.substring(0, 50),
         entityTypes: options.entityTypes,
         limit: options.limit,
+        includeAnswers: options.includeAnswers,
         timestamp: new Date().toISOString()
       }, 'search');
     }
@@ -134,7 +138,13 @@ const SearchModule = {
           query: options.query,
           entityTypes: options.entityTypes,
           size: options.limit || 25,
-          from: options.from || 0
+          from: options.from || 0,
+          // Speller options
+          enableSpellingSuggestion: options.enableSpellingSuggestion ?? true,
+          enableSpellingModification: options.enableSpellingModification ?? false,
+          enableTopResults: options.enableTopResults ?? true,
+          // Answer types (acronym, bookmark, qna)
+          includeAnswers: options.includeAnswers ?? false
         },
         req,
         userId,
@@ -148,6 +158,8 @@ const SearchModule = {
         MonitoringService.info('Search completed via module', {
           query: options.query?.substring(0, 30),
           resultCount: results.results?.length || 0,
+          hasSpellingSuggestion: !!results.spelling,
+          answerCount: results.answers?.length || 0,
           executionTimeMs: executionTime,
           timestamp: new Date().toISOString()
         }, 'search', null, userId);

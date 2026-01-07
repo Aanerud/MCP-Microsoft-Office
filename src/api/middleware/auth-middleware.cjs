@@ -38,7 +38,10 @@ async function requireAuth(req, res, next) {
         }
         
         // Check if this is an API endpoint that needs authentication
-        if (req.path.startsWith('/api/v1/') || req.path.startsWith('/v1/') || req.headers['x-mcp-internal-call'] === 'true') {
+        // NOTE: Use req.originalUrl instead of req.path because routers strip the prefix
+        // req.path would be '/search' while req.originalUrl is '/api/v1/search'
+        const fullPath = req.originalUrl || req.path;
+        if (fullPath.startsWith('/api/v1/') || fullPath.startsWith('/v1/') || req.headers['x-mcp-internal-call'] === 'true' || req.headers.authorization) {
             
             // First, try session-based authentication (for browser requests)
             if (req.session && req.session.id) {

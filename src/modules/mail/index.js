@@ -9,7 +9,7 @@ const MonitoringService = require('../../core/monitoring-service.cjs');
 
 const MAIL_CAPABILITIES = [
     'readMail',
-    'searchMail',
+    // searchMail removed - use unified 'search' tool with entityTypes: ['message']
     'sendMail',
     'flagMail',
     'getMailAttachments',

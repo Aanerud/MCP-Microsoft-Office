@@ -17,19 +17,61 @@ MonitoringService.info('Graph Search Service initialized', {
 
 /**
  * Valid entity types for Microsoft Graph Search API
+ * See: https://learn.microsoft.com/en-us/graph/search-concept-interleaving
  */
 const VALID_ENTITY_TYPES = ['message', 'event', 'driveItem', 'person', 'chatMessage', 'site', 'list', 'listItem'];
 
 /**
- * Entity type combinations that can be searched together
- * Microsoft Graph has restrictions on which types can be combined
+ * Answer entity types for enterprise knowledge
+ * See: https://learn.microsoft.com/en-us/graph/search-concept-answers
  */
-const ENTITY_TYPE_GROUPS = {
-  // These can be searched together
+const ANSWER_ENTITY_TYPES = ['acronym', 'bookmark', 'qna'];
+
+/**
+ * Entity type combinations that can be interleaved together
+ * Based on Microsoft Graph interleaving rules:
+ * - messages group: message, chatMessage (can interleave)
+ * - sharepoint group: driveItem, site, list, listItem (can interleave)
+ * - standalone: event, person (each must be searched alone)
+ */
+const ENTITY_INTERLEAVE_GROUPS = {
+  messages: ['message', 'chatMessage'],
   sharepoint: ['driveItem', 'site', 'list', 'listItem'],
-  // These must be searched separately
-  separate: ['message', 'event', 'chatMessage', 'person']
+  standalone: ['event', 'person']  // Each searched separately
 };
+
+/**
+ * Get the interleave group for an entity type
+ */
+function getInterleavGroup(entityType) {
+  for (const [group, types] of Object.entries(ENTITY_INTERLEAVE_GROUPS)) {
+    if (types.includes(entityType)) return group;
+  }
+  return 'standalone';
+}
+
+/**
+ * Group entity types by their interleaving compatibility
+ */
+function groupEntityTypes(entityTypes) {
+  const groups = {
+    messages: [],
+    sharepoint: [],
+    standalone: []
+  };
+
+  for (const type of entityTypes) {
+    const group = getInterleavGroup(type);
+    if (group === 'standalone') {
+      // Standalone types each get their own array
+      groups.standalone.push(type);
+    } else {
+      groups[group].push(type);
+    }
+  }
+
+  return groups;
+}
 
 /**
  * Normalizes a search hit to a consistent format
@@ -114,6 +156,58 @@ function normalizeSearchHit(hit, entityType) {
 }
 
 /**
+ * Normalizes an answer hit (acronym, bookmark, qna) to a consistent format
+ * See: https://learn.microsoft.com/en-us/graph/search-concept-answers
+ * @param {object} hit - Search hit from Graph API
+ * @param {string} entityType - The answer entity type
+ * @returns {object} Normalized answer result
+ */
+function normalizeAnswerHit(hit, entityType) {
+  const resource = hit.resource || {};
+
+  const base = {
+    id: resource.id || hit.hitId,
+    entityType,
+    rank: hit.rank
+  };
+
+  switch (entityType) {
+    case 'acronym':
+      return {
+        ...base,
+        displayName: resource.displayName,
+        standsFor: resource.standsFor,
+        description: resource.description,
+        webUrl: resource.webUrl
+      };
+
+    case 'bookmark':
+      return {
+        ...base,
+        displayName: resource.displayName,
+        description: resource.description,
+        webUrl: resource.webUrl,
+        keywords: resource.keywords
+      };
+
+    case 'qna':
+      return {
+        ...base,
+        displayName: resource.displayName,
+        question: resource.displayName,
+        answer: resource.description,
+        webUrl: resource.webUrl
+      };
+
+    default:
+      return {
+        ...base,
+        ...resource
+      };
+  }
+}
+
+/**
  * Performs a unified search across Microsoft 365 content
  * @param {object} options - Search options
  * @param {string} options.query - Search query string (KQL supported)
@@ -121,6 +215,10 @@ function normalizeSearchHit(hit, entityType) {
  * @param {number} [options.from=0] - Pagination offset
  * @param {number} [options.size=25] - Results per page (max 25)
  * @param {Array<string>} [options.fields] - Specific fields to return
+ * @param {boolean} [options.enableSpellingSuggestion=true] - Return spelling suggestions
+ * @param {boolean} [options.enableSpellingModification=false] - Auto-correct query typos
+ * @param {boolean} [options.enableTopResults=true] - Relevance-ranked results for messages
+ * @param {boolean} [options.includeAnswers=false] - Include acronym, bookmark, qna results
  * @param {object} req - Express request object
  * @param {string} userId - User ID for context
  * @param {string} sessionId - Session ID for context
@@ -139,7 +237,11 @@ async function search(options = {}, req, userId, sessionId) {
     entityTypes = ['message', 'event', 'driveItem', 'person'],
     from = 0,
     size = 25,
-    fields
+    fields,
+    enableSpellingSuggestion = true,
+    enableSpellingModification = false,
+    enableTopResults = true,
+    includeAnswers = false
   } = options;
 
   if (!query || typeof query !== 'string' || query.trim().length === 0) {
@@ -181,31 +283,65 @@ async function search(options = {}, req, userId, sessionId) {
   try {
     const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
 
-    // Microsoft Graph Search requires certain entity types to be searched separately
-    // We need to split requests based on entity type restrictions
-    const separateTypes = validatedTypes.filter(t => ENTITY_TYPE_GROUPS.separate.includes(t));
-    const sharepointTypes = validatedTypes.filter(t => ENTITY_TYPE_GROUPS.sharepoint.includes(t));
-
-    // Build search requests - one per separate type, plus one for SharePoint types
+    // Group entity types by interleaving compatibility
+    // See: https://learn.microsoft.com/en-us/graph/search-concept-interleaving
+    const groups = groupEntityTypes(validatedTypes);
     const requests = [];
 
-    // Add separate type requests (message, event, person each need their own request)
-    for (const entityType of separateTypes) {
-      requests.push({
-        entityTypes: [entityType],
-        query: { queryString: query },
+    // Build query object with speller options
+    // See: https://learn.microsoft.com/en-us/graph/search-concept-speller
+    const queryConfig = {
+      queryString: query
+    };
+
+    // Add speller configuration (only one mode can be active)
+    if (enableSpellingModification) {
+      queryConfig.queryTemplate = '{searchTerms}';  // Required for speller
+    }
+
+    // Messages group (message, chatMessage can interleave)
+    if (groups.messages.length > 0) {
+      const messageRequest = {
+        entityTypes: groups.messages,
+        query: queryConfig,
         from,
-        size: Math.min(size, 25) // Max 25 per request
+        size: Math.min(size, 25)
+      };
+      // enableTopResults improves message relevance ranking
+      if (enableTopResults) {
+        messageRequest.enableTopResults = true;
+      }
+      requests.push(messageRequest);
+    }
+
+    // SharePoint group (driveItem, site, list, listItem can interleave)
+    if (groups.sharepoint.length > 0) {
+      requests.push({
+        entityTypes: groups.sharepoint,
+        query: queryConfig,
+        from,
+        size: Math.min(size, 25)
       });
     }
 
-    // Add combined SharePoint request if any SharePoint types requested
-    if (sharepointTypes.length > 0) {
+    // Standalone types (event, person - each must be searched separately)
+    for (const entityType of groups.standalone) {
       requests.push({
-        entityTypes: sharepointTypes,
-        query: { queryString: query },
+        entityTypes: [entityType],
+        query: queryConfig,
         from,
         size: Math.min(size, 25)
+      });
+    }
+
+    // Add answer types if requested (acronym, bookmark, qna)
+    // See: https://learn.microsoft.com/en-us/graph/search-concept-answers
+    if (includeAnswers) {
+      requests.push({
+        entityTypes: ANSWER_ENTITY_TYPES,
+        query: queryConfig,
+        from: 0,
+        size: 10  // Answers typically have fewer results
       });
     }
 
@@ -233,10 +369,22 @@ async function search(options = {}, req, userId, sessionId) {
     const allResults = [];
     let totalHits = 0;
     let moreResultsAvailable = false;
+    let spellingAlteration = null;  // Track spelling suggestions/modifications
+    const answers = [];  // Track answer entities (acronym, bookmark, qna)
 
     for (const response of responses) {
       if (response.value && Array.isArray(response.value)) {
         for (const searchResponse of response.value) {
+          // Capture spelling alteration if present
+          // See: https://learn.microsoft.com/en-us/graph/search-concept-speller
+          if (searchResponse.queryAlterationResponse) {
+            spellingAlteration = {
+              originalQuery: searchResponse.queryAlterationResponse.originalQueryString,
+              alteredQuery: searchResponse.queryAlterationResponse.queryAlteration?.alteredQueryString,
+              alterationType: searchResponse.queryAlterationResponse.queryAlterationType
+            };
+          }
+
           if (searchResponse.hitsContainers && Array.isArray(searchResponse.hitsContainers)) {
             for (const container of searchResponse.hitsContainers) {
               totalHits += container.total || 0;
@@ -246,8 +394,14 @@ async function search(options = {}, req, userId, sessionId) {
                 for (const hit of container.hits) {
                   // Determine entity type from the resource
                   const resourceType = hit.resource?.['@odata.type']?.replace('#microsoft.graph.', '') || 'unknown';
-                  const normalizedHit = normalizeSearchHit(hit, resourceType);
-                  allResults.push(normalizedHit);
+
+                  // Separate answer types from regular results
+                  if (ANSWER_ENTITY_TYPES.includes(resourceType)) {
+                    answers.push(normalizeAnswerHit(hit, resourceType));
+                  } else {
+                    const normalizedHit = normalizeSearchHit(hit, resourceType);
+                    allResults.push(normalizedHit);
+                  }
                 }
               }
             }
@@ -279,7 +433,8 @@ async function search(options = {}, req, userId, sessionId) {
       resultCount: allResults.length
     });
 
-    return {
+    // Build response object
+    const response = {
       query,
       entityTypes: validatedTypes,
       results: allResults,
@@ -291,6 +446,18 @@ async function search(options = {}, req, userId, sessionId) {
       },
       executionTimeMs: executionTime
     };
+
+    // Add spelling alteration if present (typo correction/suggestion)
+    if (spellingAlteration && spellingAlteration.alteredQuery) {
+      response.spelling = spellingAlteration;
+    }
+
+    // Add answers if any were found (acronym, bookmark, qna)
+    if (answers.length > 0) {
+      response.answers = answers;
+    }
+
+    return response;
 
   } catch (error) {
     const executionTime = Date.now() - startTime;
@@ -374,5 +541,7 @@ module.exports = {
   searchFiles,
   searchPeople,
   VALID_ENTITY_TYPES,
-  normalizeSearchHit
+  ANSWER_ENTITY_TYPES,
+  normalizeSearchHit,
+  normalizeAnswerHit
 };

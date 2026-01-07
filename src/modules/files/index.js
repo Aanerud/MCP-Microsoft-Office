@@ -11,7 +11,7 @@ const MonitoringService = require('../../core/monitoring-service.cjs');
 // This array is used by the module registry to find appropriate modules for different intents
 const FILES_CAPABILITIES = [
     'listFiles',            // List files and folders in a directory
-    'searchFiles',          // Search files by name or content
+    // searchFiles removed - use unified 'search' tool with entityTypes: ['driveItem']
     'downloadFile',         // Download file content or get metadata with options.metadataOnly
     'uploadFile',           // Upload new files
     'getFileMetadata',      // Get file metadata by ID

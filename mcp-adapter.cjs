@@ -113,24 +113,24 @@ let adapterState = {
 // Initialize tools service with a stub module registry containing the module definitions
 const stubModuleRegistry = {
     getAllModules: () => [
-        { id: 'mail', name: 'mail', capabilities: ['getInbox', 'sendEmail', 'searchEmails', 'flagEmail', 'getEmailDetails', 'markAsRead', 'readMailDetails', 'getMailAttachments', 'markEmailRead', 'addMailAttachment', 'removeMailAttachment'] },
+        { id: 'search', name: 'search', capabilities: ['search'] },  // Search module first to avoid conflicts
+        { id: 'mail', name: 'mail', capabilities: ['getInbox', 'sendEmail', 'flagEmail', 'getEmailDetails', 'markAsRead', 'readMailDetails', 'getMailAttachments', 'markEmailRead', 'addMailAttachment', 'removeMailAttachment'] },
         { id: 'calendar', name: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
-        { id: 'files', name: 'files', capabilities: ['listFiles', 'searchFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
-        { id: 'people', name: 'people', capabilities: ['find', 'search', 'getRelevantPeople', 'getPersonById'] },
+        { id: 'files', name: 'files', capabilities: ['listFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
+        { id: 'people', name: 'people', capabilities: ['find', 'getRelevantPeople', 'getPersonById'] },
         { id: 'teams', name: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings'] },
-        { id: 'search', name: 'search', capabilities: ['search'] },
         { id: 'todo', name: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
         { id: 'contacts', name: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
         { id: 'groups', name: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] }
     ],
     getModule: (moduleName) => {
         const modules = {
-            'mail': { id: 'mail', capabilities: ['getInbox', 'sendEmail', 'searchEmails', 'flagEmail', 'getEmailDetails', 'markAsRead', 'readMailDetails', 'getMailAttachments', 'markEmailRead', 'addMailAttachment', 'removeMailAttachment'] },
-            'calendar': { id: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
-            'files': { id: 'files', capabilities: ['listFiles', 'searchFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
-            'people': { id: 'people', capabilities: ['find', 'search', 'getRelevantPeople', 'getPersonById'] },
-            'teams': { id: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings'] },
             'search': { id: 'search', capabilities: ['search'] },
+            'mail': { id: 'mail', capabilities: ['getInbox', 'sendEmail', 'flagEmail', 'getEmailDetails', 'markAsRead', 'readMailDetails', 'getMailAttachments', 'markEmailRead', 'addMailAttachment', 'removeMailAttachment'] },
+            'calendar': { id: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
+            'files': { id: 'files', capabilities: ['listFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
+            'people': { id: 'people', capabilities: ['find', 'getRelevantPeople', 'getPersonById'] },
+            'teams': { id: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings'] },
             'todo': { id: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
             'contacts': { id: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
             'groups': { id: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] }

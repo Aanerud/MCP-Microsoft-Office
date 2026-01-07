@@ -248,17 +248,18 @@ function registerRoutes(router) {
             const scopes = decoded.payload.scp ? decoded.payload.scp.split(' ').sort() : [];
 
             // Map scopes to tool capabilities
+            // Note: 'search' is the unified search tool - available with any read permission
             const scopeToTools = {
-                'Mail.Read': ['getInbox', 'searchMail', 'getEmailDetails', 'getMailAttachments'],
-                'Mail.ReadWrite': ['getInbox', 'searchMail', 'getEmailDetails', 'getMailAttachments', 'markAsRead', 'flagEmail'],
+                'Mail.Read': ['getInbox', 'search', 'getEmailDetails', 'getMailAttachments'],
+                'Mail.ReadWrite': ['getInbox', 'search', 'getEmailDetails', 'getMailAttachments', 'markAsRead', 'flagEmail'],
                 'Mail.Send': ['sendEmail'],
-                'Calendars.Read': ['getEvents', 'getAvailability'],
-                'Calendars.ReadWrite': ['getEvents', 'getAvailability', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'declineEvent', 'findMeetingTimes'],
-                'Files.Read': ['listFiles', 'searchFiles', 'downloadFile', 'getFileMetadata'],
-                'Files.ReadWrite': ['listFiles', 'searchFiles', 'downloadFile', 'getFileMetadata', 'uploadFile', 'createSharingLink'],
-                'People.Read': ['findPeople', 'getRelevantPeople'],
-                'Chat.Read': ['listChats', 'getChatMessages'],
-                'Chat.ReadWrite': ['listChats', 'getChatMessages', 'sendChatMessage'],
+                'Calendars.Read': ['getEvents', 'getAvailability', 'search'],
+                'Calendars.ReadWrite': ['getEvents', 'getAvailability', 'search', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'declineEvent', 'findMeetingTimes'],
+                'Files.Read': ['listFiles', 'search', 'downloadFile', 'getFileMetadata'],
+                'Files.ReadWrite': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'uploadFile', 'createSharingLink'],
+                'People.Read': ['findPeople', 'getRelevantPeople', 'search'],
+                'Chat.Read': ['listChats', 'getChatMessages', 'search'],
+                'Chat.ReadWrite': ['listChats', 'getChatMessages', 'sendChatMessage', 'search'],
                 'OnlineMeetings.Read': ['listOnlineMeetings', 'getOnlineMeeting'],
                 'OnlineMeetings.ReadWrite': ['listOnlineMeetings', 'getOnlineMeeting', 'createOnlineMeeting'],
                 'Team.ReadBasic.All': ['listJoinedTeams'],
