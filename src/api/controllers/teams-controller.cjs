@@ -653,6 +653,84 @@ function createTeamsController({ teamsModule }) {
             } catch (error) {
                 handleControllerError(res, error, 'getOnlineMeeting', userId, sessionId, startTime);
             }
+        },
+
+        /**
+         * Get transcripts for an online meeting
+         * GET /api/v1/teams/meetings/:meetingId/transcripts
+         */
+        async getMeetingTranscripts(req, res) {
+            const { userId = null, deviceId = null } = req.user || {};
+            const sessionId = req.session?.id;
+            const startTime = Date.now();
+            const { meetingId } = req.params;
+
+            try {
+                if (!meetingId) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'Meeting ID is required'
+                    });
+                }
+
+                const transcripts = await teamsModule.getMeetingTranscripts(meetingId, req, userId, sessionId);
+
+                if (userId) {
+                    MonitoringService.info('Retrieved meeting transcripts successfully', {
+                        meetingId: meetingId.substring(0, 20) + '...',
+                        transcriptCount: transcripts.length,
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'teams', null, userId);
+                }
+
+                res.json({ transcripts });
+            } catch (error) {
+                handleControllerError(res, error, 'getMeetingTranscripts', userId, sessionId, startTime);
+            }
+        },
+
+        /**
+         * Get transcript content for a specific transcript
+         * GET /api/v1/teams/meetings/:meetingId/transcripts/:transcriptId
+         */
+        async getMeetingTranscriptContent(req, res) {
+            const { userId = null, deviceId = null } = req.user || {};
+            const sessionId = req.session?.id;
+            const startTime = Date.now();
+            const { meetingId, transcriptId } = req.params;
+
+            try {
+                if (!meetingId) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'Meeting ID is required'
+                    });
+                }
+
+                if (!transcriptId) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'Transcript ID is required'
+                    });
+                }
+
+                const content = await teamsModule.getMeetingTranscriptContent(meetingId, transcriptId, req, userId, sessionId);
+
+                if (userId) {
+                    MonitoringService.info('Retrieved meeting transcript content successfully', {
+                        meetingId: meetingId.substring(0, 20) + '...',
+                        transcriptId: transcriptId.substring(0, 20) + '...',
+                        entryCount: content.entryCount,
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'teams', null, userId);
+                }
+
+                res.json({ transcript: content });
+            } catch (error) {
+                handleControllerError(res, error, 'getMeetingTranscriptContent', userId, sessionId, startTime);
+            }
         }
     };
 }

@@ -1148,6 +1148,256 @@ async function listOnlineMeetings(options = {}, req, userId, sessionId) {
 }
 
 // ============================================================================
+// TRANSCRIPT OPERATIONS
+// ============================================================================
+
+/**
+ * Normalizes a transcript object from Graph API response.
+ * @param {object} transcript - Raw transcript from Graph API
+ * @returns {object} Normalized transcript object
+ */
+function normalizeTranscript(transcript) {
+    return {
+        type: 'meetingTranscript',
+        id: transcript.id,
+        meetingId: transcript.meetingId,
+        createdDateTime: transcript.createdDateTime,
+        meetingOrganizerId: transcript.meetingOrganizer?.user?.id,
+        meetingOrganizerName: transcript.meetingOrganizer?.user?.displayName,
+        contentUrl: transcript.transcriptContentUrl
+    };
+}
+
+/**
+ * Parses VTT content into structured transcript entries.
+ * @param {string} vttContent - Raw VTT content
+ * @returns {Array<object>} Parsed transcript entries
+ */
+function parseVttContent(vttContent) {
+    const entries = [];
+    const lines = vttContent.split('\n');
+    let currentEntry = null;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // Skip WEBVTT header and empty lines
+        if (line === 'WEBVTT' || line === '' || line.startsWith('NOTE')) {
+            continue;
+        }
+
+        // Timestamp line (e.g., "00:00:05.000 --> 00:00:10.000")
+        if (line.includes('-->')) {
+            const [start, end] = line.split('-->').map(t => t.trim());
+            currentEntry = { startTime: start, endTime: end, speaker: null, text: '' };
+            continue;
+        }
+
+        // Speaker and text line (e.g., "<v Speaker Name>Text content")
+        if (currentEntry) {
+            const speakerMatch = line.match(/^<v\s+([^>]+)>(.*)$/);
+            if (speakerMatch) {
+                currentEntry.speaker = speakerMatch[1].trim();
+                currentEntry.text = speakerMatch[2].trim();
+            } else if (line && !line.match(/^\d+$/)) {
+                // Continuation of text or plain text without speaker tag
+                currentEntry.text += (currentEntry.text ? ' ' : '') + line;
+            }
+
+            // Check if next line is empty or a new timestamp (entry complete)
+            const nextLine = lines[i + 1]?.trim() || '';
+            if (nextLine === '' || nextLine.includes('-->') || nextLine.match(/^\d+$/)) {
+                if (currentEntry.text) {
+                    entries.push({ ...currentEntry });
+                }
+                currentEntry = null;
+            }
+        }
+    }
+
+    return entries;
+}
+
+/**
+ * Gets all transcripts for an online meeting.
+ * Requires OnlineMeetingTranscript.Read.All permission.
+ * @param {string} meetingId - Online meeting ID
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<Array<object>>} List of transcripts
+ */
+async function getMeetingTranscripts(meetingId, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!meetingId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Meeting ID is required',
+            'warning',
+            { method: 'getMeetingTranscripts' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams getMeetingTranscripts operation started', {
+            method: 'getMeetingTranscripts',
+            meetingId: meetingId.substring(0, 20) + '...',
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        const res = await client.api(`/me/onlineMeetings/${meetingId}/transcripts`, contextUserId, contextSessionId).get();
+        const transcripts = (res.value || []).map(normalizeTranscript);
+
+        const executionTime = Date.now() - startTime;
+
+        if (contextUserId) {
+            MonitoringService.info('Retrieved meeting transcripts successfully', {
+                meetingId: meetingId.substring(0, 20) + '...',
+                transcriptCount: transcripts.length,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return transcripts;
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to get meeting transcripts: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'getMeetingTranscripts',
+                meetingId: meetingId.substring(0, 20) + '...',
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+/**
+ * Gets the content of a specific meeting transcript.
+ * Returns parsed VTT content with speaker attribution.
+ * Requires OnlineMeetingTranscript.Read.All permission.
+ * @param {string} meetingId - Online meeting ID
+ * @param {string} transcriptId - Transcript ID
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} Transcript content with parsed entries
+ */
+async function getMeetingTranscriptContent(meetingId, transcriptId, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!meetingId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Meeting ID is required',
+            'warning',
+            { method: 'getMeetingTranscriptContent' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (!transcriptId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Transcript ID is required',
+            'warning',
+            { method: 'getMeetingTranscriptContent' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams getMeetingTranscriptContent operation started', {
+            method: 'getMeetingTranscriptContent',
+            meetingId: meetingId.substring(0, 20) + '...',
+            transcriptId: transcriptId.substring(0, 20) + '...',
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        // Request VTT format for transcript content
+        const vttContent = await client
+            .api(`/me/onlineMeetings/${meetingId}/transcripts/${transcriptId}/content`, contextUserId, contextSessionId)
+            .query({ '$format': 'text/vtt' })
+            .get();
+
+        // Parse VTT content into structured format
+        const entries = parseVttContent(vttContent);
+
+        const executionTime = Date.now() - startTime;
+
+        if (contextUserId) {
+            MonitoringService.info('Retrieved meeting transcript content successfully', {
+                meetingId: meetingId.substring(0, 20) + '...',
+                transcriptId: transcriptId.substring(0, 20) + '...',
+                entryCount: entries.length,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return {
+            type: 'meetingTranscriptContent',
+            meetingId,
+            transcriptId,
+            entries,
+            rawVtt: vttContent,
+            entryCount: entries.length
+        };
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to get meeting transcript content: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'getMeetingTranscriptContent',
+                meetingId: meetingId.substring(0, 20) + '...',
+                transcriptId: transcriptId.substring(0, 20) + '...',
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+// ============================================================================
 // MODULE EXPORTS
 // ============================================================================
 
@@ -1170,10 +1420,15 @@ module.exports = {
     getMeetingByJoinUrl,
     listOnlineMeetings,
 
+    // Transcript operations
+    getMeetingTranscripts,
+    getMeetingTranscriptContent,
+
     // Normalizers (exported for use in other modules)
     normalizeChat,
     normalizeTeamsMessage,
     normalizeTeam,
     normalizeChannel,
-    normalizeOnlineMeeting
+    normalizeOnlineMeeting,
+    normalizeTranscript
 };

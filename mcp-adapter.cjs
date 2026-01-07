@@ -118,7 +118,7 @@ const stubModuleRegistry = {
         { id: 'calendar', name: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
         { id: 'files', name: 'files', capabilities: ['listFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
         { id: 'people', name: 'people', capabilities: ['find', 'getRelevantPeople', 'getPersonById'] },
-        { id: 'teams', name: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings'] },
+        { id: 'teams', name: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings', 'getMeetingTranscripts', 'getMeetingTranscriptContent'] },
         { id: 'todo', name: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
         { id: 'contacts', name: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
         { id: 'groups', name: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] }
@@ -130,7 +130,7 @@ const stubModuleRegistry = {
             'calendar': { id: 'calendar', capabilities: ['getEvents', 'create', 'update', 'getAvailability', 'findMeetingTimes', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'addAttachment', 'removeAttachment'] },
             'files': { id: 'files', capabilities: ['listFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
             'people': { id: 'people', capabilities: ['find', 'getRelevantPeople', 'getPersonById'] },
-            'teams': { id: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings'] },
+            'teams': { id: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings', 'getMeetingTranscripts', 'getMeetingTranscriptContent'] },
             'todo': { id: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
             'contacts': { id: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
             'groups': { id: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] }
@@ -1770,6 +1770,23 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                 break;
             case 'teams.getMeetingByJoinUrl':
                 apiPath = '/v1/teams/meetings/findByJoinUrl';
+                apiMethod = 'GET';
+                break;
+            case 'teams.getMeetingTranscripts':
+                if (!params.meetingId) {
+                    throw new Error('Meeting ID is required for getMeetingTranscripts');
+                }
+                apiPath = `/v1/teams/meetings/${params.meetingId}/transcripts`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.getMeetingTranscriptContent':
+                if (!params.meetingId) {
+                    throw new Error('Meeting ID is required for getMeetingTranscriptContent');
+                }
+                if (!params.transcriptId) {
+                    throw new Error('Transcript ID is required for getMeetingTranscriptContent');
+                }
+                apiPath = `/v1/teams/meetings/${params.meetingId}/transcripts/${params.transcriptId}`;
                 apiMethod = 'GET';
                 break;
 

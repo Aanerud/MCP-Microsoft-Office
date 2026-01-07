@@ -925,10 +925,112 @@ function normalizePerson(person, userId, sessionId) {
     }
 }
 
+// ============================================================================
+// DEEP LINK URL BUILDERS
+// ============================================================================
+
+/**
+ * Builds a deep link URL to an Outlook email item.
+ * @param {string} itemId - The email item ID
+ * @returns {string|null} Outlook web URL or null if itemId is missing
+ */
+function buildOutlookItemUrl(itemId) {
+    if (!itemId) return null;
+    const encodedId = encodeURIComponent(itemId);
+    return `https://outlook.office365.com/owa/?ItemID=${encodedId}&exvsurl=1&viewmodel=ReadMessageItem`;
+}
+
+/**
+ * Builds a deep link URL to a Teams channel message.
+ * @param {string} channelId - The channel ID (format: 19:xxx@thread.tacv2)
+ * @param {string} messageId - The message ID
+ * @param {string} [tenantId] - The tenant ID (optional)
+ * @param {string} [groupId] - The group/team ID (optional)
+ * @returns {string|null} Teams deep link URL or null if required params are missing
+ */
+function buildTeamsMessageUrl(channelId, messageId, tenantId, groupId) {
+    if (!channelId || !messageId) return null;
+
+    let url = `https://teams.microsoft.com/l/message/${encodeURIComponent(channelId)}/${encodeURIComponent(messageId)}`;
+    const params = [];
+
+    if (tenantId) params.push(`tenantId=${encodeURIComponent(tenantId)}`);
+    if (groupId) params.push(`groupId=${encodeURIComponent(groupId)}`);
+
+    if (params.length > 0) {
+        url += '?' + params.join('&');
+    }
+
+    return url;
+}
+
+/**
+ * Builds a deep link URL to a Teams chat.
+ * @param {string} chatId - The chat ID
+ * @returns {string|null} Teams chat URL or null if chatId is missing
+ */
+function buildTeamsChatUrl(chatId) {
+    if (!chatId) return null;
+    return `https://teams.microsoft.com/l/chat/${encodeURIComponent(chatId)}`;
+}
+
+/**
+ * Builds a deep link URL to a SharePoint/OneDrive file.
+ * @param {string} webUrl - The file's web URL from Graph API
+ * @returns {string|null} The web URL or null if missing
+ */
+function buildSharePointFileUrl(webUrl) {
+    // Graph API already provides webUrl, just validate and return
+    if (!webUrl) return null;
+    return webUrl;
+}
+
+/**
+ * Builds a deep link URL to a calendar event.
+ * @param {string} eventId - The calendar event ID
+ * @returns {string|null} Outlook calendar URL or null if eventId is missing
+ */
+function buildCalendarEventUrl(eventId) {
+    if (!eventId) return null;
+    const encodedId = encodeURIComponent(eventId);
+    return `https://outlook.office365.com/owa/?ItemID=${encodedId}&exvsurl=1&viewmodel=ReadMessageItem`;
+}
+
+/**
+ * Builds a Microsoft Search deep link for a query.
+ * @param {string} query - The search query
+ * @param {string} [entityType] - Optional entity type filter (person, message, event, file)
+ * @returns {string} Microsoft Search URL
+ */
+function buildSearchUrl(query, entityType) {
+    if (!query) return null;
+    let url = `https://www.office.com/search?q=${encodeURIComponent(query)}`;
+    if (entityType) {
+        // Map entity types to Office search entity filters
+        const entityMap = {
+            'person': 'People',
+            'message': 'Mail',
+            'event': 'Events',
+            'driveItem': 'Files',
+            'file': 'Files'
+        };
+        const filter = entityMap[entityType] || entityType;
+        url += `&filters=EntityType:${filter}`;
+    }
+    return url;
+}
+
 module.exports = {
     normalizeEmail,
     normalizeFile,
     normalizeEvent,
     normalizeUser,
-    normalizePerson
+    normalizePerson,
+    // URL builders
+    buildOutlookItemUrl,
+    buildTeamsMessageUrl,
+    buildTeamsChatUrl,
+    buildSharePointFileUrl,
+    buildCalendarEventUrl,
+    buildSearchUrl
 };

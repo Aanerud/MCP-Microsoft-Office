@@ -7,6 +7,7 @@
 const graphClientFactory = require('./graph-client.cjs');
 const ErrorService = require('../core/error-service.cjs');
 const MonitoringService = require('../core/monitoring-service.cjs');
+const { buildOutlookItemUrl, buildCalendarEventUrl, buildSharePointFileUrl, buildSearchUrl } = require('./normalizers.cjs');
 
 // Log service initialization
 MonitoringService.info('Graph Search Service initialized', {
@@ -102,7 +103,7 @@ function normalizeSearchHit(hit, entityType) {
         bodyPreview: resource.bodyPreview?.substring(0, 200),
         hasAttachments: resource.hasAttachments,
         importance: resource.importance,
-        webLink: resource.webLink
+        webLink: resource.webLink || buildOutlookItemUrl(resource.id)
       };
 
     case 'event':
@@ -117,7 +118,7 @@ function normalizeSearchHit(hit, entityType) {
           email: resource.organizer.emailAddress.address
         } : null,
         isAllDay: resource.isAllDay,
-        webLink: resource.webLink
+        webLink: resource.webLink || buildCalendarEventUrl(resource.id)
       };
 
     case 'driveItem':

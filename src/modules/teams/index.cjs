@@ -22,7 +22,10 @@ const TEAMS_CAPABILITIES = [
     'createOnlineMeeting',
     'getOnlineMeeting',
     'getMeetingByJoinUrl',
-    'listOnlineMeetings'
+    'listOnlineMeetings',
+    // Transcript operations
+    'getMeetingTranscripts',
+    'getMeetingTranscriptContent'
 ];
 
 // Log module initialization
@@ -701,6 +704,102 @@ const TeamsModule = {
         }
     },
 
+    /**
+     * Get transcripts for an online meeting
+     * @param {string} meetingId - Meeting ID
+     * @param {object} req - Express request
+     * @param {string} userId - User ID
+     * @param {string} sessionId - Session ID
+     * @returns {Promise<Array<object>>} Array of transcripts
+     */
+    async getMeetingTranscripts(meetingId, req, userId, sessionId) {
+        const startTime = Date.now();
+        const { teamsService } = this.services || {};
+
+        if (!teamsService || typeof teamsService.getMeetingTranscripts !== 'function') {
+            const mcpError = ErrorService.createError(
+                'teams',
+                'TeamsService not available',
+                'error',
+                { method: 'getMeetingTranscripts', moduleId: 'teams' }
+            );
+            MonitoringService.logError(mcpError);
+            throw mcpError;
+        }
+
+        try {
+            const transcripts = await teamsService.getMeetingTranscripts(meetingId, req, userId, sessionId);
+            const executionTime = Date.now() - startTime;
+
+            if (userId) {
+                MonitoringService.info('Retrieved meeting transcripts via module', {
+                    meetingId: meetingId.substring(0, 20) + '...',
+                    transcriptCount: transcripts.length,
+                    executionTimeMs: executionTime,
+                    timestamp: new Date().toISOString()
+                }, 'teams', null, userId);
+            }
+
+            return transcripts;
+        } catch (error) {
+            MonitoringService.error('Teams module: getMeetingTranscripts failed', {
+                error: error.message,
+                executionTimeMs: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, userId);
+            throw error;
+        }
+    },
+
+    /**
+     * Get transcript content for a specific transcript
+     * @param {string} meetingId - Meeting ID
+     * @param {string} transcriptId - Transcript ID
+     * @param {object} req - Express request
+     * @param {string} userId - User ID
+     * @param {string} sessionId - Session ID
+     * @returns {Promise<object>} Transcript content with parsed entries
+     */
+    async getMeetingTranscriptContent(meetingId, transcriptId, req, userId, sessionId) {
+        const startTime = Date.now();
+        const { teamsService } = this.services || {};
+
+        if (!teamsService || typeof teamsService.getMeetingTranscriptContent !== 'function') {
+            const mcpError = ErrorService.createError(
+                'teams',
+                'TeamsService not available',
+                'error',
+                { method: 'getMeetingTranscriptContent', moduleId: 'teams' }
+            );
+            MonitoringService.logError(mcpError);
+            throw mcpError;
+        }
+
+        try {
+            const content = await teamsService.getMeetingTranscriptContent(meetingId, transcriptId, req, userId, sessionId);
+            const executionTime = Date.now() - startTime;
+
+            if (userId) {
+                MonitoringService.info('Retrieved meeting transcript content via module', {
+                    meetingId: meetingId.substring(0, 20) + '...',
+                    transcriptId: transcriptId.substring(0, 20) + '...',
+                    entryCount: content.entryCount,
+                    executionTimeMs: executionTime,
+                    timestamp: new Date().toISOString()
+                }, 'teams', null, userId);
+            }
+
+            return content;
+        } catch (error) {
+            MonitoringService.error('Teams module: getMeetingTranscriptContent failed', {
+                error: error.message,
+                executionTimeMs: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, userId);
+            throw error;
+        }
+    },
+
     // ========================================================================
     // INTENT HANDLER
     // ========================================================================
@@ -760,6 +859,13 @@ const TeamsModule = {
 
             case 'listOnlineMeetings':
                 return this.listOnlineMeetings(params, req, userId, sessionId);
+
+            // Transcript intents
+            case 'getMeetingTranscripts':
+                return this.getMeetingTranscripts(params.meetingId, req, userId, sessionId);
+
+            case 'getMeetingTranscriptContent':
+                return this.getMeetingTranscriptContent(params.meetingId, params.transcriptId, req, userId, sessionId);
 
             default:
                 const error = ErrorService.createError(

@@ -203,6 +203,9 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
         getOnlineMeeting: { moduleName: 'teams', methodName: 'getOnlineMeeting' },
         getMeetingByJoinUrl: { moduleName: 'teams', methodName: 'getMeetingByJoinUrl' },
         listOnlineMeetings: { moduleName: 'teams', methodName: 'listOnlineMeetings' },
+        // Teams module tools - Transcript operations
+        getMeetingTranscripts: { moduleName: 'teams', methodName: 'getMeetingTranscripts' },
+        getMeetingTranscriptContent: { moduleName: 'teams', methodName: 'getMeetingTranscriptContent' },
 
         // Query module
         query: { moduleName: 'query', methodName: 'processQuery' }
@@ -1551,6 +1554,37 @@ This endpoint uses Microsoft Graph's calendarView which properly expands recurri
                         description: 'Maximum number of meetings to retrieve',
                         optional: true,
                         default: 20
+                    }
+                };
+                break;
+
+            case 'getMeetingTranscripts':
+                toolDef.description = 'Get all transcripts for a Teams online meeting. Returns a list of available transcripts with metadata. Requires OnlineMeetingTranscript.Read.All permission.';
+                toolDef.endpoint = '/api/v1/teams/meetings/{meetingId}/transcripts';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    meetingId: {
+                        type: 'string',
+                        description: 'The ID of the online meeting to get transcripts for',
+                        required: true
+                    }
+                };
+                break;
+
+            case 'getMeetingTranscriptContent':
+                toolDef.description = 'Get the full content of a specific meeting transcript. Returns parsed transcript entries with speaker attribution and timestamps. Use getMeetingTranscripts first to get available transcript IDs.';
+                toolDef.endpoint = '/api/v1/teams/meetings/{meetingId}/transcripts/{transcriptId}';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    meetingId: {
+                        type: 'string',
+                        description: 'The ID of the online meeting',
+                        required: true
+                    },
+                    transcriptId: {
+                        type: 'string',
+                        description: 'The ID of the transcript to retrieve',
+                        required: true
                     }
                 };
                 break;

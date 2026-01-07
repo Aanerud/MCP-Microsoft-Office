@@ -262,6 +262,7 @@ function registerRoutes(router) {
                 'Chat.ReadWrite': ['listChats', 'getChatMessages', 'sendChatMessage', 'search'],
                 'OnlineMeetings.Read': ['listOnlineMeetings', 'getOnlineMeeting'],
                 'OnlineMeetings.ReadWrite': ['listOnlineMeetings', 'getOnlineMeeting', 'createOnlineMeeting'],
+                'OnlineMeetingTranscript.Read.All': ['getMeetingTranscripts', 'getMeetingTranscriptContent'],
                 'Team.ReadBasic.All': ['listJoinedTeams'],
                 'Channel.ReadBasic.All': ['listTeamChannels', 'getChannelMessages'],
                 'ChannelMessage.Send': ['sendChannelMessage'],
@@ -409,6 +410,9 @@ function registerRoutes(router) {
     teamsRouter.post('/meetings', placeholderRateLimit, teamsController.createOnlineMeeting); // /v1/teams/meetings
     teamsRouter.get('/meetings/findByJoinUrl', teamsController.getMeetingByJoinUrl); // /v1/teams/meetings/findByJoinUrl
     teamsRouter.get('/meetings/:meetingId', teamsController.getOnlineMeeting); // /v1/teams/meetings/:meetingId
+    // Transcript routes
+    teamsRouter.get('/meetings/:meetingId/transcripts', teamsController.getMeetingTranscripts); // /v1/teams/meetings/:meetingId/transcripts
+    teamsRouter.get('/meetings/:meetingId/transcripts/:transcriptId', teamsController.getMeetingTranscriptContent); // /v1/teams/meetings/:meetingId/transcripts/:transcriptId
     v1.use('/teams', teamsRouter);
 
     // --- To-Do Router ---
