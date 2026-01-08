@@ -106,11 +106,28 @@ async function startDevServer(userId, sessionId) {
     const isHttps = process.env.ENABLE_HTTPS === 'true';
     const isSilentMode = process.env.MCP_SILENT_MODE === 'true';
     
-    // Initialize database factory and storage service first
+    // Start server FIRST to pass Azure startup probe, then initialize modules
+    // This prevents startup timeout when module initialization is slow
+    console.log('[STARTUP] Starting HTTP server early for health checks...');
+
+    // Create minimal app for early health check
+    const earlyApp = express();
+    earlyApp.get('/api/health', (req, res) => res.json({ status: 'starting' }));
+    earlyApp.get('/api/status', (req, res) => res.json({ status: 'starting', ready: false }));
+
+    const earlyServer = earlyApp.listen(PORT, HOST, () => {
+      console.log(`[STARTUP] Early health endpoint running on ${HOST}:${PORT}`);
+    });
+
+    // Now initialize modules (can take longer)
     console.log('[STARTUP] Beginning module initialization...');
     try {
       await initializeModules();
       console.log('[STARTUP] Module initialization complete');
+
+      // Close early server - main server will take over
+      earlyServer.close();
+      console.log('[STARTUP] Early server closed, starting main server...');
 
       // Pattern 2: User Activity Logs
       if (userId) {
