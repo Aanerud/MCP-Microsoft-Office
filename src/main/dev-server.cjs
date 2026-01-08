@@ -105,10 +105,14 @@ async function startDevServer(userId, sessionId) {
     const isProduction = process.env.NODE_ENV === 'production';
     const isHttps = process.env.ENABLE_HTTPS === 'true';
     const isSilentMode = process.env.MCP_SILENT_MODE === 'true';
-    
+
+    // Define HOST and PORT early so they're available for early server
+    const HOST = process.env.HOST || '0.0.0.0';
+    const PORT = process.env.PORT || 3000;
+
     // Start server FIRST to pass Azure startup probe, then initialize modules
     // This prevents startup timeout when module initialization is slow
-    console.log('[STARTUP] Starting HTTP server early for health checks...');
+    console.log(`[STARTUP] Starting HTTP server early for health checks on ${HOST}:${PORT}...`);
 
     // Create minimal app for early health check
     const earlyApp = express();
@@ -196,14 +200,10 @@ async function startDevServer(userId, sessionId) {
     // In production, we don't use morgan at all when silent mode is enabled
     monitoringService.info('HTTP request logging disabled in production mode', {}, 'server');
   }
-  const HOST = process.env.HOST || 'localhost';
-  const PORT = process.env.PORT || 3000;
-  
-  // Skip verbose request logging for cleaner output
-  
+
   // Directly register API routes on the main app
   // This avoids proxy issues by using the same server for both frontend and API
-  
+
   // Import required modules for API
   console.log('[STARTUP] Importing API modules...');
   const statusRouter = require('../api/status.cjs');
@@ -214,7 +214,7 @@ async function startDevServer(userId, sessionId) {
   console.log('[STARTUP] Setting up middleware...');
   serverModule.setupMiddleware(app);
   console.log('[STARTUP] Middleware setup complete');
-  
+
   // Add helmet middleware for security headers
   // Pattern 1: Development Debug Logs
   if (process.env.NODE_ENV === 'development') {
@@ -224,7 +224,7 @@ async function startDevServer(userId, sessionId) {
       production: isProduction
     }, 'security');
   }
-  
+
   // Pattern 2: User Activity Logs
   if (userId) {
     monitoringService.info('Security headers configured', {
