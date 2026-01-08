@@ -561,6 +561,15 @@ npm test
 npm run dev:web    # Start server with hot reload
 ```
 
+### Deploying to Azure
+
+For production deployments to Azure App Service, see the [Azure Deployment Guide](docs/azure-deployment.md).
+
+Key points:
+- Uses GitHub Actions for CI/CD
+- Requires custom startup script for proper Node.js initialization
+- Supports automatic deployments on push to `main`
+
 ---
 
 ## Contributing
