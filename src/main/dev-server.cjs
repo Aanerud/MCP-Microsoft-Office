@@ -107,9 +107,11 @@ async function startDevServer(userId, sessionId) {
     const isSilentMode = process.env.MCP_SILENT_MODE === 'true';
     
     // Initialize database factory and storage service first
+    console.log('[STARTUP] Beginning module initialization...');
     try {
       await initializeModules();
-      
+      console.log('[STARTUP] Module initialization complete');
+
       // Pattern 2: User Activity Logs
       if (userId) {
         monitoringService.info('Modules initialized successfully', {
@@ -154,7 +156,9 @@ async function startDevServer(userId, sessionId) {
     }
   
   // Create a single Express app for both frontend and API
+  console.log('[STARTUP] Creating Express app...');
   const app = express();
+  console.log('[STARTUP] Express app created');
   
   // Configure trust proxy for Azure App Service and other cloud deployments
   // This fixes X-Forwarded-For header issues with express-rate-limit
@@ -184,11 +188,15 @@ async function startDevServer(userId, sessionId) {
   // This avoids proxy issues by using the same server for both frontend and API
   
   // Import required modules for API
+  console.log('[STARTUP] Importing API modules...');
   const statusRouter = require('../api/status.cjs');
   const { registerRoutes } = require('../api/routes.cjs');
-  
+  console.log('[STARTUP] API modules imported');
+
   // Set up middleware from the server module
+  console.log('[STARTUP] Setting up middleware...');
   serverModule.setupMiddleware(app);
+  console.log('[STARTUP] Middleware setup complete');
   
   // Add helmet middleware for security headers
   // Pattern 1: Development Debug Logs
@@ -799,7 +807,8 @@ async function startDevServer(userId, sessionId) {
       }
     }
   }
-  
+
+  console.log(`[STARTUP] About to listen on ${HOST}:${PORT}...`);
   const server = serverInstance.listen(PORT, HOST, () => {
     const startupTime = Date.now() - startTime;
     const serverUrl = `${protocol}://${HOST}:${PORT}`;
