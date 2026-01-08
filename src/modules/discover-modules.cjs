@@ -103,10 +103,11 @@ async function discoverModules(modulesDir, userId, sessionId) {
             mod = require(modPath);
             
             // Must have id, name, capabilities, init, handleIntent
-            if (mod && mod.id && mod.name && Array.isArray(mod.capabilities) && 
+            if (mod && mod.id && mod.name && Array.isArray(mod.capabilities) &&
                 typeof mod.init === 'function' && typeof mod.handleIntent === 'function') {
-                
-                moduleRegistry.registerModule(mod);
+
+                // Use updateModule to avoid "already registered" errors
+                moduleRegistry.updateModule(mod);
                 registered.push(mod);
                 
                 // Pattern 1: Development Debug Logs

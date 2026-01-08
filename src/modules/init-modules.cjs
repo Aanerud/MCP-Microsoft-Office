@@ -225,9 +225,10 @@ async function initializeModules(services = {}, userId, sessionId) {
                 
                 // Call the module's init function with the services
                 const initializedModule = await mod.init(enrichedServices);
-                
+
                 // Replace the module in the registry with the initialized instance
-                moduleRegistry.registerModule(initializedModule);
+                // Use updateModule to avoid "already registered" errors
+                moduleRegistry.updateModule(initializedModule);
                 
                 // Add to the list of successfully initialized modules
                 initialized.push(initializedModule);

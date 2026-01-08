@@ -127,10 +127,11 @@ async function requireAuth(req, res, next) {
                         }, 'auth');
                     }
                     
+                    res.set('WWW-Authenticate', 'Bearer realm="MCP Remote Service"');
                     return res.status(401).json({
                         error: 'Authentication required',
                         message: 'Missing Authorization header or valid session'
-                    }).header('WWW-Authenticate', 'Bearer realm="MCP Remote Service"');
+                    });
                 }
 
                 // Extract token from Authorization header
@@ -146,10 +147,11 @@ async function requireAuth(req, res, next) {
                         }, 'auth');
                     }
                     
+                    res.set('WWW-Authenticate', 'Bearer realm="MCP Remote Service"');
                     return res.status(401).json({
                         error: 'Authentication required',
                         message: 'Invalid Authorization header format'
-                    }).header('WWW-Authenticate', 'Bearer realm="MCP Remote Service"');
+                    });
                 }
                 
                 // Verify token signature and expiration
@@ -228,10 +230,11 @@ async function requireAuth(req, res, next) {
                     }
 
                     const statusCode = error.message.includes('expired') ? 401 : 401;
+                    res.set('WWW-Authenticate', 'Bearer realm="MCP Remote Service"');
                     return res.status(statusCode).json({
                         error: 'Authentication failed',
                         message: error.message
-                    }).header('WWW-Authenticate', 'Bearer realm="MCP Remote Service"');
+                    });
                 }
 
                 return res.status(500).json({

@@ -254,6 +254,46 @@ class ModuleRegistry {
     }
 
     /**
+     * Updates an existing module in the registry (replaces with new version).
+     * If the module doesn't exist, registers it as new.
+     * @param {object} module - Must have id, name, capabilities, init, handleIntent
+     * @param {string} userId - User ID for logging context
+     * @param {string} sessionId - Session ID for logging context
+     */
+    updateModule(module, userId, sessionId) {
+        if (!module || !module.id) {
+            return;
+        }
+
+        // If module doesn't exist, just register it
+        if (!this.modules.has(module.id)) {
+            this.registerModule(module, userId, sessionId);
+            return;
+        }
+
+        // Update the module in place
+        const moduleToStore = { ...module, priority: module.priority || 0 };
+        this.modules.set(module.id, moduleToStore);
+        this.registrationTimestamps.set(module.id, new Date());
+
+        // Update capabilities
+        if (Array.isArray(module.capabilities)) {
+            for (const cap of module.capabilities) {
+                if (!this.capabilityMap.has(cap)) this.capabilityMap.set(cap, new Set());
+                this.capabilityMap.get(cap).add(module.id);
+            }
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+            MonitoringService.debug('Module updated in registry', {
+                moduleId: module.id,
+                moduleName: module.name,
+                timestamp: new Date().toISOString()
+            }, 'module');
+        }
+    }
+
+    /**
      * Returns a registered module by id.
      * @param {string} id
      * @param {object} [options] - Optional settings.
