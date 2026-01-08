@@ -82,6 +82,8 @@ setInterval(() => {
 
 const apiRateLimit = createRateLimiter(RATE_LIMIT_MAX);
 const authRateLimit = createRateLimiter(RATE_LIMIT_AUTH_MAX);
+// Placeholder rate limit - used for endpoints that need rate limiting configured
+const placeholderRateLimit = apiRateLimit;
 
 // SEC-2: CORS allowlist configuration
 const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '')
