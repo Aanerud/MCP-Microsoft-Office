@@ -123,6 +123,14 @@ function setupMiddleware(expressApp, userId, sessionId) {
         max: 100, // Limit each IP to 100 requests per windowMs
         standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
         legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+        // Custom key generator to handle Azure App Service IP format (may include port)
+        keyGenerator: (request) => {
+            const ip = request.ip || request.connection?.remoteAddress || 'unknown';
+            // Strip port if present (e.g., "192.168.1.1:12345" -> "192.168.1.1")
+            return ip.split(':')[0];
+        },
+        // Disable validation warnings for Azure deployments
+        validate: { trustProxy: false, xForwardedForHeader: false },
         handler: (request, response, next) => {
             monitoringService?.warn('Rate limit exceeded for authentication endpoint', {
                 ip: request.ip,
@@ -147,6 +155,14 @@ function setupMiddleware(expressApp, userId, sessionId) {
         max: 1000, // Limit each IP to 1000 requests per windowMs for general API
         standardHeaders: true,
         legacyHeaders: false,
+        // Custom key generator to handle Azure App Service IP format (may include port)
+        keyGenerator: (request) => {
+            const ip = request.ip || request.connection?.remoteAddress || 'unknown';
+            // Strip port if present (e.g., "192.168.1.1:12345" -> "192.168.1.1")
+            return ip.split(':')[0];
+        },
+        // Disable validation warnings for Azure deployments
+        validate: { trustProxy: false, xForwardedForHeader: false },
         handler: (request, response, next) => {
             monitoringService?.warn('Rate limit exceeded for API endpoint', {
                 ip: request.ip,
