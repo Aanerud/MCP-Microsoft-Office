@@ -1606,13 +1606,24 @@ const CalendarModule = {
 
         const intentHandlers = {
             'getEvents': async (entities, context) => {
-                const range = entities.range || {};
-                const cacheKey = `calendar:events:${JSON.stringify(range)}`;
+                // Extract date/filter parameters - support both flat params and nested range object
+                const queryParams = entities.range || {
+                    timeframe: entities.timeframe,
+                    start: entities.start,
+                    end: entities.end,
+                    limit: entities.limit,
+                    filter: entities.filter,
+                    subject: entities.subject,
+                    organizer: entities.organizer,
+                    location: entities.location,
+                    orderby: entities.orderby
+                };
+                const cacheKey = `calendar:events:${JSON.stringify(queryParams)}`;
                 let events = cacheService && await cacheService.get(cacheKey);
                 if (!events) {
                     // Ensure graphService is available before using
                     if (!graphService) throw new Error('GraphService is unavailable for getEvents.');
-                    const raw = await graphService.getEvents(range, context.req);
+                    const raw = await graphService.getEvents({ ...queryParams, req: context.req });
                     events = Array.isArray(raw) ? raw.map(normalizeEvent) : [];
                     if (cacheService) await cacheService.set(cacheKey, events, 60); // Cache for 1 minute
                 }

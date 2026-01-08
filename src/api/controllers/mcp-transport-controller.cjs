@@ -154,8 +154,9 @@ async function executeTool(toolName, args, req) {
         throw new Error(`Method not found: ${moduleName}.${methodName}`);
     }
 
-    // Call the handler with args and access token
-    const result = await handler({ ...args, accessToken });
+    // Call the handler with args, access token, and request object
+    // Module methods expect (options, req) signature for proper authentication context
+    const result = await handler({ ...args, accessToken }, req);
 
     MonitoringService.info('MCP tool executed successfully', {
         toolName,
