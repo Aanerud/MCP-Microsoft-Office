@@ -10,6 +10,9 @@ const ErrorService = require('../core/error-service.cjs');
 const StorageService = require('../core/storage-service.cjs');
 const { databaseFactory } = require('../core/database-factory.cjs');
 const graphService = require('../graph/graph-service.cjs');
+const todoService = require('../graph/todo-service.cjs');
+const contactsService = require('../graph/contacts-service.cjs');
+const groupsService = require('../graph/groups-service.cjs');
 
 /**
  * Initializes all registered modules with provided dependencies/services.
@@ -165,7 +168,10 @@ async function initializeModules(services = {}, userId, sessionId) {
         monitoringService: MonitoringService,
         storageService: StorageService,
         databaseFactory: databaseFactory,
-        graphService: graphService
+        graphService: graphService,
+        todoService: todoService,
+        contactsService: contactsService,
+        groupsService: groupsService
     };
     
     // Log initialization start
