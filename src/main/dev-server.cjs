@@ -12,25 +12,55 @@ console.log('[AZURE-TRACE] dev-server.cjs loaded at:', new Date().toISOString())
 // Load environment variables from .env file
 require('dotenv').config();
 
+// Minimal requires needed for early server
 const express = require('express');
+const http = require('http');
+
+// START SERVER IMMEDIATELY to pass Azure startup probe
+// This must happen BEFORE loading heavy modules that may block
+const HOST = process.env.HOST || '0.0.0.0';
+const PORT = process.env.PORT || 3000;
+
+console.log(`[AZURE-STARTUP] Starting early HTTP server on ${HOST}:${PORT}...`);
+
+const earlyApp = express();
+earlyApp.get('/api/health', (req, res) => res.json({ status: 'starting', phase: 'early' }));
+earlyApp.get('/api/status', (req, res) => res.json({ status: 'starting', ready: false }));
+earlyApp.get('/', (req, res) => res.send('Server starting...'));
+
+let earlyServer;
+try {
+  earlyServer = earlyApp.listen(PORT, HOST, () => {
+    console.log(`[AZURE-STARTUP] Early health endpoint running on ${HOST}:${PORT}`);
+  });
+} catch (err) {
+  console.error('[AZURE-STARTUP] Failed to start early server:', err.message);
+}
+
+// Now load the rest of the modules (these may be slow)
+console.log('[AZURE-STARTUP] Loading application modules...');
+
 const session = require('express-session');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
-const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const helmet = require('helmet');
 
-// Import services
+// Import services (these may auto-initialize)
+console.log('[AZURE-STARTUP] Loading services...');
 const monitoringService = require('../core/monitoring-service.cjs');
 const errorService = require('../core/error-service.cjs');
 const storageService = require('../core/storage-service.cjs');
 
 // Import the server module but don't start it automatically
+console.log('[AZURE-STARTUP] Loading server module...');
 const serverModule = require('./server.cjs');
 
 // Import initialization function for modules
+console.log('[AZURE-STARTUP] Loading init-modules...');
 const { initializeModules } = require('../modules/init-modules.cjs');
+console.log('[AZURE-STARTUP] All modules loaded successfully');
 
 // Set up dependency injection between services to avoid circular references
 // This is critical to prevent infinite error loops
@@ -109,32 +139,17 @@ async function startDevServer(userId, sessionId) {
     const isHttps = process.env.ENABLE_HTTPS === 'true';
     const isSilentMode = process.env.MCP_SILENT_MODE === 'true';
 
-    // Define HOST and PORT early so they're available for early server
-    const HOST = process.env.HOST || '0.0.0.0';
-    const PORT = process.env.PORT || 3000;
-
-    // Start server FIRST to pass Azure startup probe, then initialize modules
-    // This prevents startup timeout when module initialization is slow
-    console.log(`[AZURE-FIX-V2] Starting early HTTP server on ${HOST}:${PORT}...`);
-
-    // Create minimal app for early health check
-    const earlyApp = express();
-    earlyApp.get('/api/health', (req, res) => res.json({ status: 'starting' }));
-    earlyApp.get('/api/status', (req, res) => res.json({ status: 'starting', ready: false }));
-
-    const earlyServer = earlyApp.listen(PORT, HOST, () => {
-      console.log(`[STARTUP] Early health endpoint running on ${HOST}:${PORT}`);
-    });
-
-    // Now initialize modules (can take longer)
+    // Now initialize modules (early server is already running from module load)
     console.log('[STARTUP] Beginning module initialization...');
     try {
       await initializeModules();
       console.log('[STARTUP] Module initialization complete');
 
       // Close early server - main server will take over
-      earlyServer.close();
-      console.log('[STARTUP] Early server closed, starting main server...');
+      if (earlyServer) {
+        earlyServer.close();
+        console.log('[STARTUP] Early server closed, starting main server...');
+      }
 
       // Pattern 2: User Activity Logs
       if (userId) {
