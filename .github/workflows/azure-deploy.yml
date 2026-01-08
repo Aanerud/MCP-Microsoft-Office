@@ -16,21 +16,18 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        node-version: '20'
         cache: 'npm'
-    
-    - name: Install dependencies
+
+    - name: Install production dependencies
       run: |
-        # Clean install to ensure fresh dependencies
+        # Clean install production dependencies only (using correct npm 7+ flag)
         rm -rf node_modules
-        npm ci
-    
-    - name: Create production build
-      run: |
-        # Clean install production dependencies
-        rm -rf node_modules
-        npm ci --only=production
-        
+        npm ci --omit=dev
+
+        # Rebuild native modules for Linux
+        npm rebuild
+
         # Copy production environment file
         cp .env.production .env || true
     
