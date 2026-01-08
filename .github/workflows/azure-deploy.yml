@@ -30,12 +30,19 @@ jobs:
 
         # Copy production environment file
         cp .env.production .env || true
-    
+
+        # Verify critical dependencies are installed
+        echo "Verifying dependencies..."
+        ls -la node_modules/ | head -20
+        test -d node_modules/dotenv && echo "✓ dotenv installed" || (echo "✗ dotenv missing!" && exit 1)
+        test -d node_modules/express && echo "✓ express installed" || (echo "✗ express missing!" && exit 1)
+
     - name: Upload artifact for deployment job
       uses: actions/upload-artifact@v4
       with:
         name: node-app
         path: .
+        include-hidden-files: true
 
   deploy:
     runs-on: ubuntu-latest
