@@ -15,6 +15,14 @@ let sqlite3, pg, mysql2;
 let pgPool = null;
 let mysqlPool = null;
 
+// SQLite singleton connection (SQLite works best with a single connection)
+let sqliteDb = null;
+let sqliteDbReady = false;
+
+// SQLite retry configuration for SQLITE_BUSY errors
+const SQLITE_RETRY_COUNT = 5;
+const SQLITE_RETRY_BASE_DELAY_MS = 50;
+
 /**
  * Database connection interface
  */
@@ -115,19 +123,33 @@ class DatabaseConnection {
   }
 
   async querySQLite(sql, params, userId, sessionId) {
-    return new Promise((resolve, reject) => {
-      if (sql.toLowerCase().startsWith('select') || sql.toLowerCase().startsWith('pragma')) {
-        this.connection.all(sql, params, (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
+    // Retry logic for SQLITE_BUSY errors
+    for (let attempt = 0; attempt < SQLITE_RETRY_COUNT; attempt++) {
+      try {
+        return await new Promise((resolve, reject) => {
+          if (sql.toLowerCase().startsWith('select') || sql.toLowerCase().startsWith('pragma')) {
+            this.connection.all(sql, params, (err, rows) => {
+              if (err) reject(err);
+              else resolve(rows);
+            });
+          } else {
+            this.connection.run(sql, params, function(err) {
+              if (err) reject(err);
+              else resolve({ changes: this.changes, lastID: this.lastID });
+            });
+          }
         });
-      } else {
-        this.connection.run(sql, params, function(err) {
-          if (err) reject(err);
-          else resolve({ changes: this.changes, lastID: this.lastID });
-        });
+      } catch (err) {
+        // Check if this is a SQLITE_BUSY error and we have retries left
+        if (err.code === 'SQLITE_BUSY' && attempt < SQLITE_RETRY_COUNT - 1) {
+          // Exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms
+          const delay = SQLITE_RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        throw err;
       }
-    });
+    }
   }
 
   async queryPostgreSQL(sql, params, userId, sessionId) {
@@ -152,9 +174,9 @@ class DatabaseConnection {
   async close() {
     switch (this.type) {
       case 'sqlite':
-        return new Promise((resolve) => {
-          this.connection.close(resolve);
-        });
+        // SQLite uses singleton connection - don't close it
+        // The connection will be closed when the factory is closed
+        return;
       case 'postgresql':
         // Connection is returned to pool automatically
         this.connection.release();
@@ -270,7 +292,7 @@ class DatabaseFactory {
 
   async initSQLite(userId, sessionId) {
     const startTime = Date.now();
-    
+
     try {
       // Pattern 1: Development Debug Logs
       if (process.env.NODE_ENV === 'development') {
@@ -281,25 +303,58 @@ class DatabaseFactory {
           timestamp: new Date().toISOString()
         }, 'database');
       }
-      
+
       sqlite3 = require('sqlite3').verbose();
-      
+
       // Ensure data directory exists
       const dataDir = path.dirname(this.config.DB_PATH);
       if (!fs.existsSync(dataDir)) {
         fs.mkdirSync(dataDir, { recursive: true });
       }
 
-      // Test connection
-      const testDb = new sqlite3.Database(this.config.DB_PATH);
+      // Create singleton connection for SQLite
+      sqliteDb = new sqlite3.Database(this.config.DB_PATH);
+
+      // Enable WAL mode for better concurrent access
       await new Promise((resolve, reject) => {
-        testDb.close((err) => err ? reject(err) : resolve());
+        sqliteDb.run('PRAGMA journal_mode=WAL', (err) => {
+          if (err) {
+            console.warn('[DATABASE] WAL mode not enabled:', err.message);
+            resolve(); // Continue even if WAL fails
+          } else {
+            console.log('[DATABASE] SQLite WAL mode enabled');
+            resolve();
+          }
+        });
       });
+
+      // Set busy timeout to wait for locks instead of failing immediately (5 seconds)
+      await new Promise((resolve, reject) => {
+        sqliteDb.run('PRAGMA busy_timeout=5000', (err) => {
+          if (err) {
+            console.warn('[DATABASE] busy_timeout not set:', err.message);
+            resolve();
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      // Enable foreign keys
+      await new Promise((resolve, reject) => {
+        sqliteDb.run('PRAGMA foreign_keys=ON', (err) => {
+          if (err) resolve(); // Continue even if this fails
+          else resolve();
+        });
+      });
+
+      sqliteDbReady = true;
 
       // Pattern 2: User Activity Logs
       if (userId) {
         MonitoringService.info('SQLite database initialized successfully', {
           dbPath: this.config.DB_PATH,
+          walMode: true,
           duration: Date.now() - startTime,
           timestamp: new Date().toISOString()
         }, 'database', null, userId);
@@ -307,6 +362,7 @@ class DatabaseFactory {
         MonitoringService.info('SQLite database initialized with session', {
           sessionId,
           dbPath: this.config.DB_PATH,
+          walMode: true,
           duration: Date.now() - startTime,
           timestamp: new Date().toISOString()
         }, 'database');
@@ -328,7 +384,7 @@ class DatabaseFactory {
         }
       );
       MonitoringService.logError(mcpError);
-      
+
       // Pattern 4: User Error Tracking
       if (userId) {
         MonitoringService.error('SQLite database initialization failed', {
@@ -344,7 +400,7 @@ class DatabaseFactory {
           timestamp: new Date().toISOString()
         }, 'database');
       }
-      
+
       throw mcpError;
     }
   }
@@ -564,7 +620,11 @@ class DatabaseFactory {
 
       switch (this.config.DB_TYPE) {
         case 'sqlite':
-          connection = new sqlite3.Database(this.config.DB_PATH);
+          // Use singleton connection for SQLite (better for concurrent access with WAL mode)
+          if (!sqliteDb || !sqliteDbReady) {
+            throw new Error('SQLite singleton connection not initialized');
+          }
+          connection = sqliteDb;
           break;
         case 'postgresql':
           connection = await pgPool.connect();
@@ -666,6 +726,20 @@ class DatabaseFactory {
         }, 'database');
       }
       
+      // Close SQLite singleton connection
+      if (sqliteDb) {
+        await new Promise((resolve) => {
+          sqliteDb.close((err) => {
+            if (err) {
+              console.warn('[DATABASE] Error closing SQLite:', err.message);
+            }
+            resolve();
+          });
+        });
+        sqliteDb = null;
+        sqliteDbReady = false;
+      }
+
       if (pgPool) {
         await pgPool.end();
         pgPool = null;

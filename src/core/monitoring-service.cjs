@@ -130,6 +130,10 @@ try {
 // Memory monitoring constants from original
 const MEMORY_CHECK_INTERVAL = 30000; // 30 seconds
 const MEMORY_WARNING_THRESHOLD = 0.85; // 85% of max memory
+// RSS-based memory limit - use environment variable or default to 1.5GB for Azure B1 tier (1.75GB)
+const RSS_MEMORY_LIMIT_MB = parseInt(process.env.NODE_MEMORY_LIMIT_MB || '1500', 10);
+const RSS_WARNING_THRESHOLD_MB = RSS_MEMORY_LIMIT_MB * 0.85; // 85% of RSS limit
+const RSS_EMERGENCY_THRESHOLD_MB = RSS_MEMORY_LIMIT_MB * 0.95; // 95% of RSS limit
 
 // Error throttling from original
 const errorThrottles = new Map();
@@ -265,28 +269,31 @@ function shouldLogError(category) {
 
 /**
  * Copy memory monitoring from original service
+ * Updated to use RSS-based thresholds for more accurate monitoring
  */
 function startMemoryMonitoring() {
   let memoryCheckInterval = null;
-  
+
   const checkMemory = () => {
     try {
       const memoryUsage = process.memoryUsage();
-      const heapUsed = memoryUsage.heapUsed;
-      const heapTotal = memoryUsage.heapTotal;
-      const usageRatio = heapUsed / heapTotal;
-      
-      if (usageRatio > MEMORY_WARNING_THRESHOLD) {
-        console.warn(`[MEMORY WARNING] High memory usage: ${Math.round(usageRatio * 100)}% (${Math.round(heapUsed / 1024 / 1024)}MB / ${Math.round(heapTotal / 1024 / 1024)}MB)`);
-        
+      const rssMB = memoryUsage.rss / 1024 / 1024;
+      const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024;
+      const heapTotalMB = memoryUsage.heapTotal / 1024 / 1024;
+
+      // Use RSS-based threshold for actual memory usage (not heap ratio which can be misleading)
+      if (rssMB > RSS_WARNING_THRESHOLD_MB) {
+        console.warn(`[MEMORY WARNING] High memory usage: RSS ${Math.round(rssMB)}MB / ${RSS_MEMORY_LIMIT_MB}MB limit (heap: ${Math.round(heapUsedMB)}MB / ${Math.round(heapTotalMB)}MB)`);
+
         // Get EventService with safe error handling
         const service = getEventService();
         if (service) {
           try {
             service.emit(eventTypes.SYSTEM_MEMORY_WARNING, {
-              usageRatio,
-              heapUsed: heapUsed / 1024 / 1024,
-              heapTotal: heapTotal / 1024 / 1024,
+              rssMB,
+              rssLimitMB: RSS_MEMORY_LIMIT_MB,
+              heapUsedMB,
+              heapTotalMB,
               timestamp: new Date().toISOString()
             }).catch(err => {
               console.error('[MEMORY WARNING] Memory warning event promise rejected:', err.message);
@@ -294,10 +301,8 @@ function startMemoryMonitoring() {
           } catch (emitError) {
             console.error('[MEMORY WARNING] Failed to emit memory warning event:', emitError.message);
           }
-        } else {
-          console.warn(`[MEMORY WARNING] Memory usage at ${usageRatio.toFixed(1)}% (${(heapUsed / 1024 / 1024).toFixed(1)} MB / ${(heapTotal / 1024 / 1024).toFixed(1)} MB)`);
         }
-        
+
         if (global.gc) {
           console.log('[MEMORY] Forcing garbage collection');
           global.gc();
@@ -307,46 +312,51 @@ function startMemoryMonitoring() {
       // Silently ignore memory monitoring errors
     }
   };
-  
+
   memoryCheckInterval = setInterval(checkMemory, MEMORY_CHECK_INTERVAL);
-  
+
   process.on('exit', () => {
     if (memoryCheckInterval) {
       clearInterval(memoryCheckInterval);
     }
   });
-  
+
   checkMemory();
 }
 
 /**
  * Copy emergency memory check from original service
+ * Updated to use RSS-based thresholds for more accurate monitoring
  */
 function checkMemoryForEmergency() {
   const now = Date.now();
   if (now - lastMemoryCheck < MEMORY_CHECK_INTERVAL_MS) {
-    return false;
+    return emergencyLoggingDisabled;
   }
-  
+
   lastMemoryCheck = now;
-  
+
   try {
     const memoryUsage = process.memoryUsage();
-    const heapUsed = memoryUsage.heapUsed;
-    const heapTotal = memoryUsage.heapTotal;
-    const usageRatio = heapUsed / heapTotal;
-    
-    if (usageRatio > 0.95) {
+    const rssMB = memoryUsage.rss / 1024 / 1024;
+    const heapUsedMB = memoryUsage.heapUsed / 1024 / 1024;
+    const heapTotalMB = memoryUsage.heapTotal / 1024 / 1024;
+
+    // Use RSS-based threshold (actual memory usage) instead of heap ratio
+    if (rssMB > RSS_EMERGENCY_THRESHOLD_MB) {
       if (!emergencyLoggingDisabled) {
-        console.error(`[EMERGENCY] Disabling all logging due to critical memory usage: ${Math.round(usageRatio * 100)}%`);
+        console.error(`[EMERGENCY] Disabling all logging due to critical memory usage: RSS ${Math.round(rssMB)}MB / ${RSS_MEMORY_LIMIT_MB}MB limit`);
         emergencyLoggingDisabled = true;
-        
+
         // Emit emergency event if event service is available
         if (eventService) {
           try {
             eventService.emit(eventTypes.SYSTEM_EMERGENCY, {
               type: 'memory_critical',
-              usageRatio,
+              rssMB,
+              rssLimitMB: RSS_MEMORY_LIMIT_MB,
+              heapUsedMB,
+              heapTotalMB,
               timestamp: new Date().toISOString()
             });
           } catch (error) {
@@ -355,14 +365,14 @@ function checkMemoryForEmergency() {
         }
       }
       return true;
-    } else if (emergencyLoggingDisabled && usageRatio < 0.80) {
-      console.log(`[EMERGENCY] Re-enabling logging as memory usage has decreased: ${Math.round(usageRatio * 100)}%`);
+    } else if (emergencyLoggingDisabled && rssMB < RSS_WARNING_THRESHOLD_MB) {
+      console.log(`[EMERGENCY] Re-enabling logging as memory usage has decreased: RSS ${Math.round(rssMB)}MB`);
       emergencyLoggingDisabled = false;
     }
   } catch (e) {
     // If we can't check memory, assume it's safe to log
   }
-  
+
   return emergencyLoggingDisabled;
 }
 
