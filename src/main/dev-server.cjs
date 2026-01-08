@@ -6,6 +6,9 @@
  * - Improved logging
  */
 
+// VERY FIRST LOG - before any requires
+console.log('[AZURE-TRACE] dev-server.cjs loaded at:', new Date().toISOString());
+
 // Load environment variables from .env file
 require('dotenv').config();
 
@@ -112,7 +115,7 @@ async function startDevServer(userId, sessionId) {
 
     // Start server FIRST to pass Azure startup probe, then initialize modules
     // This prevents startup timeout when module initialization is slow
-    console.log(`[STARTUP] Starting HTTP server early for health checks on ${HOST}:${PORT}...`);
+    console.log(`[AZURE-FIX-V2] Starting early HTTP server on ${HOST}:${PORT}...`);
 
     // Create minimal app for early health check
     const earlyApp = express();
