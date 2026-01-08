@@ -101,22 +101,30 @@ module.exports = ({ calendarModule }) => ({
                 limit: Joi.number().integer().min(1).max(100).default(20),
                 filter: Joi.string().optional(),
                 debug: Joi.boolean().default(false).optional(),
+                // Date range parameters
+                start: Joi.string().optional(),
+                end: Joi.string().optional(),
                 startDateTime: Joi.date().iso().optional(),
                 endDateTime: Joi.date().iso().optional(),
+                timeframe: Joi.string().valid('today', 'tomorrow', 'this_week', 'next_week', 'this_month', 'next_month').optional(),
                 // Convenience filter parameters
                 organizer: Joi.string().optional(),
                 subject: Joi.string().optional(),
                 location: Joi.string().optional(),
                 attendee: Joi.string().optional()
             });
-            
+
             // Convert query parameters for validation
             const queryParams = {
                 limit: req.query.limit ? Number(req.query.limit) : undefined,
                 filter: req.query.filter,
                 debug: req.query.debug === 'true',
+                // Date range parameters
+                start: req.query.start,
+                end: req.query.end,
                 startDateTime: req.query.startDateTime,
                 endDateTime: req.query.endDateTime,
+                timeframe: req.query.timeframe,
                 // Convenience filter parameters
                 organizer: req.query.organizer,
                 subject: req.query.subject,
@@ -140,25 +148,28 @@ module.exports = ({ calendarModule }) => ({
                 });
             }
             
-            const { limit: top, filter, debug, organizer, subject, location, attendee } = value;
+            const { limit: top, filter, debug, start, end, startDateTime, endDateTime, timeframe, organizer, subject, location, attendee } = value;
             let rawEvents = null;
             
             // For debugging, get raw events if requested
             if (debug && isModuleMethodAvailable('getEventsRaw', calendarModule)) {
                 try {
-                    MonitoringService?.info('Fetching raw events for debug', { 
-                        top, 
+                    MonitoringService?.info('Fetching raw events for debug', {
+                        top,
                         filter,
+                        start,
+                        end,
+                        timeframe,
                         organizer,
                         subject,
                         location,
                         attendee,
-                        userId: actualUserId, 
-                        deviceId 
+                        userId: actualUserId,
+                        deviceId
                     }, 'calendar', null, actualUserId, deviceId);
                     // Pass req object for user-scoped token selection, but don't pass internal userId to Graph API
                     // The internal userId is only for token storage - Graph API should use 'me' (default)
-                    rawEvents = await calendarModule.getEventsRaw({ top, filter, organizer, subject, location, attendee }, req);
+                    rawEvents = await calendarModule.getEventsRaw({ top, filter, start, end, startDateTime, endDateTime, timeframe, organizer, subject, location, attendee }, req);
                     MonitoringService?.info(`Retrieved ${rawEvents.length} raw events`, { 
                         count: rawEvents.length, 
                         userId: actualUserId, 
@@ -179,21 +190,36 @@ module.exports = ({ calendarModule }) => ({
             let events = [];
             let isMock = false;
             try {
-                MonitoringService?.info('Attempting to get real calendar events from module', { 
-                    top, 
+                MonitoringService?.info('Attempting to get real calendar events from module', {
+                    top,
                     filter,
+                    start,
+                    end,
+                    timeframe,
                     organizer,
                     subject,
                     location,
                     attendee,
-                    userId: actualUserId, 
-                    deviceId 
+                    userId: actualUserId,
+                    deviceId
                 }, 'calendar', null, actualUserId, deviceId);
                 
                 if (isModuleMethodAvailable('getEvents', calendarModule)) {
                     // Pass req object for user-scoped token selection, but don't pass internal userId to Graph API
                     // The internal userId is only for token storage - Graph API should use 'me' (default)
-                    events = await calendarModule.getEvents({ top, filter, organizer, subject, location, attendee }, req);
+                    events = await calendarModule.getEvents({
+                        top,
+                        filter,
+                        start,
+                        end,
+                        startDateTime,
+                        endDateTime,
+                        timeframe,
+                        organizer,
+                        subject,
+                        location,
+                        attendee
+                    }, req);
                     MonitoringService?.info(`Successfully retrieved ${events.length} real calendar events`, { 
                         count: events.length, 
                         userId: actualUserId, 
