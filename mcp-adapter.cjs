@@ -846,6 +846,7 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                 break;
                 
             case 'mail.sendEmail':
+            case 'mail.sendMail':
             case 'mail.send':
                 const toolDefinition = toolsService.getToolByName('mail.sendEmail');
                 if (toolDefinition) {
