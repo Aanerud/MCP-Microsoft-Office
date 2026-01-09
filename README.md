@@ -30,21 +30,22 @@ This project creates a bridge between AI assistants (like Claude) and Microsoft 
 │  Claude Desktop │ ◄────────────────► │   MCP Adapter   │   email data"     │   MCP Server    │
 │  (Your AI)      │                    │ (On Your PC)    │ ◄───────────────► │   (Local or     │
 │                 │                    │                 │                    │    Remote)      │
-└─────────────────┘                    └─────────────────┘                    └────────┬────────┘
-                                                                                       │
-                                                                                       │ Talks to
-                                                                                       │ Microsoft
-                                                                                       ▼
-                                                                             ┌─────────────────┐
-                                                                             │  Microsoft 365  │
-                                                                             │  (Your Account) │
-                                                                             └─────────────────┘
+└─────────────────┘                    └────────┬────────┘                    └────────┬────────┘
+                                                │                                       │
+                                                │ Requires                              │ Talks to
+                                                │ Node.js +                             │ Microsoft
+                                                │ npm install                           ▼
+                                                ▼                             ┌─────────────────┐
+                                       ┌─────────────────┐                    │  Microsoft 365  │
+                                       │  node_modules/  │                    │  (Your Account) │
+                                       │  (Dependencies) │                    └─────────────────┘
+                                       └─────────────────┘
 ```
 
 **Three Parts:**
 
 1. **Claude Desktop** - The AI you chat with
-2. **MCP Adapter** - A small program that runs on your computer (translates what Claude asks into web requests)
+2. **MCP Adapter** - A Node.js program that runs on your computer (translates what Claude asks into web requests). **Must be installed locally with dependencies.**
 3. **MCP Server** - Handles security and talks to Microsoft 365 (can run on your PC or a remote server)
 
 ---
@@ -59,6 +60,15 @@ A: The Model Context Protocol (MCP) requires a local adapter to translate betwee
 - **Security**: Your Microsoft credentials never leave your server
 - **Multi-User**: Multiple people can authenticate separately and use the same server
 - **Any AI Client**: The adapter pattern works with any MCP-compatible AI, not just Claude
+
+**Q: Why must the adapter be installed locally?**
+
+A: The MCP adapter is a Node.js application that Claude Desktop spawns as a subprocess. It:
+
+- Communicates with Claude via stdin/stdout (JSON-RPC protocol)
+- Makes HTTP requests to the MCP server on your behalf
+- Requires npm dependencies (`joi` for validation, core services)
+- Cannot run "in the cloud" - it must run on the same machine as Claude Desktop
 
 ---
 
@@ -178,9 +188,37 @@ After logging in:
 
 ---
 
-### Step 5: Configure Claude Desktop
+### Step 5: Install the MCP Adapter
 
-The adapter runs from the project folder (it needs `node_modules` for dependencies).
+The MCP adapter is a Node.js application that Claude Desktop runs locally. It requires dependencies to be installed.
+
+#### Prerequisites
+
+- **Node.js 18+** must be installed ([Download here](https://nodejs.org/))
+- Verify installation: `node --version` (should show v18 or higher)
+
+#### Install the Adapter
+
+The adapter runs from the project folder and needs its dependencies:
+
+```bash
+# Navigate to where you cloned the project
+cd /path/to/MCP-Microsoft-Office
+
+# Install dependencies (if you haven't already from Step 2)
+npm install
+
+# Verify the adapter exists
+ls -la mcp-adapter.cjs
+```
+
+**Important:** The adapter requires the `node_modules` folder. It cannot run as a standalone file because it imports local modules and npm packages.
+
+---
+
+### Step 6: Configure Claude Desktop
+
+Now configure Claude Desktop to use the adapter you just installed.
 
 #### On macOS
 
@@ -202,7 +240,7 @@ Edit: `~/Library/Application Support/Claude/claude_desktop_config.json`
 ```
 
 **Replace:**
-- `YOUR_USERNAME` with your macOS username (or use full path to where you cloned the project)
+- `YOUR_USERNAME` with your macOS username (or use the full path to where you cloned the project)
 - `paste-your-token-here` with the token from Step 4
 - Change `MCP_SERVER_URL` if using a remote server
 
@@ -225,9 +263,11 @@ Edit: `%APPDATA%\Claude\claude_desktop_config.json`
 }
 ```
 
+**Important:** The path must point to the folder where you ran `npm install`. Claude Desktop will spawn the adapter as a subprocess, and it needs access to the `node_modules` folder in the same directory.
+
 ---
 
-### Step 6: Restart Claude Desktop
+### Step 7: Restart Claude Desktop
 
 1. Quit Claude Desktop completely
 2. Start it again
@@ -505,6 +545,35 @@ Configure these in your `.env` file:
 2. Check the adapter path is correct for your OS
 3. Make sure Node.js is installed: `node --version`
 4. Restart Claude Desktop completely
+
+### "Cannot find module" or "MODULE_NOT_FOUND"
+
+**Problem:** The adapter can't find its dependencies.
+
+**Fix:**
+1. Make sure you're pointing to the correct project folder:
+   ```bash
+   ls /path/to/MCP-Microsoft-Office/node_modules
+   ```
+2. If `node_modules` doesn't exist, run:
+   ```bash
+   cd /path/to/MCP-Microsoft-Office
+   npm install
+   ```
+3. Verify the path in `claude_desktop_config.json` points to where you ran `npm install`
+
+### "Error: Cannot find module 'joi'" (or other package)
+
+**Problem:** Dependencies weren't installed properly.
+
+**Fix:**
+```bash
+cd /path/to/MCP-Microsoft-Office
+rm -rf node_modules
+npm install
+```
+
+Then restart Claude Desktop.
 
 ---
 
