@@ -401,20 +401,89 @@ async function _fetchWithRetry(path, token, method, body, options, retries = 2, 
                 if (res.status === 204 || res.headers.get('content-length') === '0') {
                     return { success: true, status: res.status };
                 }
-                
-                // For responses with content, try to parse JSON
-                try {
-                    return await res.json();
-                } catch (jsonError) {
-                    // If JSON parsing fails but response was successful, return success indicator
-                    MonitoringService?.debug('Graph API response successful but no JSON content', {
-                        method,
-                        path,
-                        status: res.status,
-                        timestamp: new Date().toISOString()
-                    }, 'graph');
-                    return { success: true, status: res.status };
+
+                // Check content type to determine how to handle response
+                const contentType = res.headers.get('content-type') || '';
+
+                // Check if content type is text-based (should not be returned as binary)
+                const isTextContent = contentType.includes('text/') ||
+                    contentType.includes('application/json') ||
+                    contentType.includes('application/xml');
+
+                // For binary/file content responses (e.g., /content endpoint), return raw buffer
+                // But exclude text-based content types that should be returned as strings
+                const isBinaryContent = !isTextContent && (
+                    path.includes('/content') ||
+                    contentType.includes('application/octet-stream') ||
+                    contentType.includes('application/pdf') ||
+                    contentType.includes('image/') ||
+                    contentType.includes('application/vnd.') ||
+                    contentType.includes('application/msword') ||
+                    contentType.includes('application/zip')
+                );
+
+                if (isBinaryContent) {
+                    // Pattern 1: Development Debug Logs
+                    if (process.env.NODE_ENV === 'development') {
+                        MonitoringService?.debug('Graph API returning binary content', {
+                            method,
+                            path,
+                            contentType,
+                            status: res.status,
+                            timestamp: new Date().toISOString()
+                        }, 'graph');
+                    }
+
+                    // Return raw buffer for binary content
+                    const buffer = await res.buffer();
+                    return buffer;
                 }
+
+                // For text content types (but not JSON), return as text string
+                if (isTextContent && !contentType.includes('application/json')) {
+                    if (process.env.NODE_ENV === 'development') {
+                        MonitoringService?.debug('Graph API returning text content', {
+                            method,
+                            path,
+                            contentType,
+                            status: res.status,
+                            timestamp: new Date().toISOString()
+                        }, 'graph');
+                    }
+                    return await res.text();
+                }
+
+                // For JSON responses or unknown content types, read as text first then try to parse
+                // (node-fetch only allows reading body once, so we read as text and parse manually)
+                const bodyText = await res.text();
+
+                // Try to parse as JSON first
+                if (contentType.includes('application/json') || !contentType) {
+                    try {
+                        return JSON.parse(bodyText);
+                    } catch (jsonError) {
+                        // Not valid JSON, return as text if we have content
+                        if (bodyText && bodyText.length > 0) {
+                            MonitoringService?.debug('Graph API response is not JSON, returning as text', {
+                                method,
+                                path,
+                                status: res.status,
+                                contentType,
+                                bodyLength: bodyText.length,
+                                timestamp: new Date().toISOString()
+                            }, 'graph');
+                            return bodyText;
+                        }
+                        return { success: true, status: res.status };
+                    }
+                }
+
+                // For other content types, return as text
+                if (bodyText && bodyText.length > 0) {
+                    return bodyText;
+                }
+
+                return { success: true, status: res.status };
             }
             
             if (res.status === 429) {

@@ -1577,6 +1577,11 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
             case 'files.searchFiles':
                 apiPath = '/v1/files/search';
                 apiMethod = 'GET';
+                // Map 'query' parameter to 'q' as expected by the controller
+                if (params.query && !params.q) {
+                    params.q = params.query;
+                    delete params.query;
+                }
                 break;
             case 'files.downloadFile':
                 apiPath = '/v1/files/download';
@@ -1608,6 +1613,11 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
             case 'files.getFileContent':
                 apiPath = '/v1/files/content';
                 apiMethod = 'GET';
+                // Map 'fileId' parameter to 'id' as expected by the controller
+                if (params.fileId && !params.id) {
+                    params.id = params.fileId;
+                    delete params.fileId;
+                }
                 break;
             case 'files.setFileContent':
                 apiPath = '/v1/files/content';
