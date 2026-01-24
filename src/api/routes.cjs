@@ -358,7 +358,10 @@ function registerRoutes(router) {
                 'OnlineMeetingTranscript.Read.All': ['getMeetingTranscripts', 'getMeetingTranscriptContent'],
                 'Team.ReadBasic.All': ['listJoinedTeams'],
                 'Channel.ReadBasic.All': ['listTeamChannels', 'getChannelMessages'],
+                'Channel.Create': ['createTeamChannel'],
+                'ChannelMember.ReadWrite.All': ['addChannelMember'],
                 'ChannelMessage.Send': ['sendChannelMessage', 'replyToMessage'],
+                'Files.ReadWrite.All': ['listChannelFiles', 'uploadFileToChannel', 'readChannelFile'],
                 // Tasks tools
                 'Tasks.Read': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask'],
                 'Tasks.ReadWrite': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'createTask', 'updateTask', 'deleteTask', 'completeTask'],
@@ -498,6 +501,7 @@ function registerRoutes(router) {
     teamsRouter.use(controllerLogger());
     // Chat routes
     teamsRouter.get('/chats', teamsController.listChats); // /v1/teams/chats
+    teamsRouter.post('/chats', placeholderRateLimit, teamsController.createChat); // /v1/teams/chats (create new chat)
     teamsRouter.get('/chats/:chatId/messages', teamsController.getChatMessages); // /v1/teams/chats/:chatId/messages
     teamsRouter.post('/chats/:chatId/messages', placeholderRateLimit, teamsController.sendChatMessage); // /v1/teams/chats/:chatId/messages
     // Teams and channel routes
@@ -506,6 +510,13 @@ function registerRoutes(router) {
     teamsRouter.get('/:teamId/channels/:channelId/messages', teamsController.getChannelMessages); // /v1/teams/:teamId/channels/:channelId/messages
     teamsRouter.post('/:teamId/channels/:channelId/messages', placeholderRateLimit, teamsController.sendChannelMessage); // /v1/teams/:teamId/channels/:channelId/messages
     teamsRouter.post('/:teamId/channels/:channelId/messages/:messageId/replies', placeholderRateLimit, teamsController.replyToMessage); // /v1/teams/:teamId/channels/:channelId/messages/:messageId/replies
+    // Channel management routes
+    teamsRouter.post('/:teamId/channels', placeholderRateLimit, teamsController.createTeamChannel); // /v1/teams/:teamId/channels
+    teamsRouter.post('/:teamId/channels/:channelId/members', placeholderRateLimit, teamsController.addChannelMember); // /v1/teams/:teamId/channels/:channelId/members
+    // Channel files routes
+    teamsRouter.get('/:teamId/channels/:channelId/files', teamsController.listChannelFiles); // /v1/teams/:teamId/channels/:channelId/files
+    teamsRouter.post('/:teamId/channels/:channelId/files', placeholderRateLimit, teamsController.uploadFileToChannel); // /v1/teams/:teamId/channels/:channelId/files
+    teamsRouter.get('/:teamId/channels/:channelId/files/:fileName', teamsController.readChannelFile); // /v1/teams/:teamId/channels/:channelId/files/:fileName
     // Meeting routes
     teamsRouter.get('/meetings', teamsController.listOnlineMeetings); // /v1/teams/meetings
     teamsRouter.post('/meetings', placeholderRateLimit, teamsController.createOnlineMeeting); // /v1/teams/meetings

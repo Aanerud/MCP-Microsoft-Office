@@ -119,6 +119,44 @@ function normalizeChannel(graphChannel) {
 }
 
 /**
+ * Normalizes a Graph channel member object to MCP schema.
+ * @param {object} graphMember - Raw channel member from Graph API
+ * @returns {object} Normalized channel member object
+ */
+function normalizeChannelMember(graphMember) {
+    return {
+        id: graphMember.id,
+        type: 'channelMember',
+        displayName: graphMember.displayName,
+        userId: graphMember.userId,
+        email: graphMember.email,
+        roles: graphMember.roles || []
+    };
+}
+
+/**
+ * Normalizes a Graph drive item (file) object to MCP schema for channel files.
+ * @param {object} graphItem - Raw drive item from Graph API
+ * @returns {object} Normalized channel file object
+ */
+function normalizeChannelFile(graphItem) {
+    return {
+        id: graphItem.id,
+        type: 'channelFile',
+        name: graphItem.name,
+        size: graphItem.size,
+        mimeType: graphItem.file?.mimeType || null,
+        webUrl: graphItem.webUrl,
+        downloadUrl: graphItem['@microsoft.graph.downloadUrl'] || null,
+        createdDateTime: graphItem.createdDateTime,
+        lastModifiedDateTime: graphItem.lastModifiedDateTime,
+        lastModifiedBy: graphItem.lastModifiedBy?.user?.displayName || null,
+        driveId: graphItem.parentReference?.driveId || null,
+        parentId: graphItem.parentReference?.id || null
+    };
+}
+
+/**
  * Normalizes a Graph online meeting object to MCP schema.
  * @param {object} graphMeeting - Raw online meeting object from Graph API
  * @returns {object} Normalized meeting object
@@ -226,6 +264,98 @@ async function getChats(options = {}, req, userId, sessionId) {
             }, 'teams', null, contextUserId);
         }
 
+        throw mcpError;
+    }
+}
+
+/**
+ * Creates a new 1:1 or group chat.
+ * @param {object} chatData - Chat details { members: [{ email }], chatType, topic }
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} Created chat object
+ */
+async function createChat(chatData, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!chatData?.members || chatData.members.length === 0) {
+        const error = ErrorService.createError(
+            'teams',
+            'At least one member is required to create a chat',
+            'warning',
+            { method: 'createChat' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams createChat operation started', {
+            method: 'createChat',
+            memberCount: chatData.members.length,
+            chatType: chatData.chatType || 'oneOnOne',
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        // Build members array with the current user and specified members
+        const members = chatData.members.map(member => ({
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            roles: member.roles || ['owner'],
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${member.email || member.userId}')`
+        }));
+
+        const body = {
+            chatType: chatData.chatType || 'oneOnOne',
+            members: members
+        };
+
+        if (chatData.topic) {
+            body.topic = chatData.topic;
+        }
+
+        const res = await client.api('/chats', contextUserId, contextSessionId).post(body);
+        const chat = normalizeChat(res);
+
+        const executionTime = Date.now() - startTime;
+
+        if (contextUserId) {
+            MonitoringService.info('Created chat successfully', {
+                chatId: chat.id,
+                chatType: body.chatType,
+                memberCount: members.length,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return chat;
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to create chat: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'createChat',
+                memberCount: chatData.members.length,
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
         throw mcpError;
     }
 }
@@ -388,6 +518,116 @@ async function sendChatMessage(chatId, messageData, req, userId, sessionId) {
                 service: 'graph-teams-service',
                 method: 'sendChatMessage',
                 chatId: chatId.substring(0, 20) + '...',
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+/**
+ * Creates a new chat (1:1 or group).
+ * @param {object} chatData - Chat data { members: [{ email, roles? }], chatType?, topic? }
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} Created chat object
+ */
+async function createChat(chatData, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!chatData?.members || chatData.members.length === 0) {
+        const error = ErrorService.createError(
+            'teams',
+            'At least one member is required to create a chat',
+            'warning',
+            { method: 'createChat' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams createChat operation started', {
+            method: 'createChat',
+            memberCount: chatData.members.length,
+            chatType: chatData.chatType || 'oneOnOne',
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        // Get current user's ID for the members list
+        const meResponse = await client.api('/me?$select=id', contextUserId, contextSessionId).get();
+        const currentUserId = meResponse.id;
+
+        // Build members array with @odata.type for conversationMember
+        const members = [
+            {
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                roles: ['owner'],
+                'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${currentUserId}')`
+            }
+        ];
+
+        // Add requested members (need to resolve email to user ID)
+        // For oneOnOne chats, both members need 'owner' role per Graph API docs
+        for (const member of chatData.members) {
+            // Resolve user by email
+            const userResponse = await client.api(`/users/${encodeURIComponent(member.email)}?$select=id`, contextUserId, contextSessionId).get();
+            members.push({
+                '@odata.type': '#microsoft.graph.aadUserConversationMember',
+                roles: member.roles && member.roles.length > 0 ? member.roles : ['owner'],
+                'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${userResponse.id}')`
+            });
+        }
+
+        const body = {
+            chatType: chatData.chatType || 'oneOnOne',
+            members: members
+        };
+
+        if (chatData.topic && chatData.chatType === 'group') {
+            body.topic = chatData.topic;
+        }
+
+        const res = await client.api('/chats', contextUserId, contextSessionId).post(body);
+        const chat = normalizeChat(res);
+
+        const executionTime = Date.now() - startTime;
+
+        if (contextUserId) {
+            MonitoringService.info('Created chat successfully', {
+                chatId: chat.id,
+                chatType: chat.chatType,
+                memberCount: members.length,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return chat;
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to create chat: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'createChat',
+                memberCount: chatData.members.length,
                 executionTimeMs: executionTime,
                 error: error.message,
                 statusCode: error.statusCode || error.code,
@@ -811,6 +1051,598 @@ async function replyToMessage(teamId, channelId, messageId, replyData, req, user
                 teamId: teamId.substring(0, 20) + '...',
                 channelId: channelId.substring(0, 20) + '...',
                 messageId: messageId.substring(0, 20) + '...',
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+/**
+ * Creates a new channel in a team.
+ * @param {string} teamId - Team ID
+ * @param {object} channelData - Channel details { displayName, description, membershipType }
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} Created channel object
+ */
+async function createChannel(teamId, channelData, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!teamId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Team ID is required',
+            'warning',
+            { method: 'createChannel' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (!channelData?.displayName) {
+        const error = ErrorService.createError(
+            'teams',
+            'Channel display name is required',
+            'warning',
+            { method: 'createChannel' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams createChannel operation started', {
+            method: 'createChannel',
+            teamId: teamId.substring(0, 20) + '...',
+            displayName: channelData.displayName,
+            membershipType: channelData.membershipType || 'standard',
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        const body = {
+            displayName: channelData.displayName,
+            membershipType: channelData.membershipType || 'standard'
+        };
+
+        if (channelData.description) {
+            body.description = channelData.description;
+        }
+
+        const res = await client.api(`/teams/${teamId}/channels`, contextUserId, contextSessionId).post(body);
+        const channel = normalizeChannel(res);
+
+        const executionTime = Date.now() - startTime;
+
+        if (contextUserId) {
+            MonitoringService.info('Created channel successfully', {
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channel.id,
+                displayName: channelData.displayName,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return channel;
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to create channel: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'createChannel',
+                teamId: teamId.substring(0, 20) + '...',
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+/**
+ * Adds a member to a channel (for private channels).
+ * @param {string} teamId - Team ID
+ * @param {string} channelId - Channel ID
+ * @param {object} memberData - Member details { userEmail, roles }
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} Added member object
+ */
+async function addChannelMember(teamId, channelId, memberData, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!teamId || !channelId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Team ID and Channel ID are required',
+            'warning',
+            { method: 'addChannelMember' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (!memberData?.userEmail) {
+        const error = ErrorService.createError(
+            'teams',
+            'User email is required',
+            'warning',
+            { method: 'addChannelMember' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams addChannelMember operation started', {
+            method: 'addChannelMember',
+            teamId: teamId.substring(0, 20) + '...',
+            channelId: channelId.substring(0, 20) + '...',
+            userEmail: memberData.userEmail.substring(0, 10) + '...',
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        // Build the member body according to Graph API format
+        const body = {
+            '@odata.type': '#microsoft.graph.aadUserConversationMember',
+            'user@odata.bind': `https://graph.microsoft.com/v1.0/users('${memberData.userEmail}')`,
+            roles: memberData.roles || []
+        };
+
+        const res = await client.api(`/teams/${teamId}/channels/${channelId}/members`, contextUserId, contextSessionId).post(body);
+        const member = normalizeChannelMember(res);
+
+        const executionTime = Date.now() - startTime;
+
+        if (contextUserId) {
+            MonitoringService.info('Added channel member successfully', {
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                memberId: member.id,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return member;
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to add channel member: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'addChannelMember',
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+/**
+ * Gets the files folder (SharePoint document library folder) for a channel.
+ * This is an internal helper function used by file operations.
+ * @param {string} teamId - Team ID
+ * @param {string} channelId - Channel ID
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} Files folder info { driveId, folderId }
+ */
+async function getChannelFilesFolder(teamId, channelId, req, userId, sessionId) {
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!teamId || !channelId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Team ID and Channel ID are required',
+            'warning',
+            { method: 'getChannelFilesFolder' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    try {
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        const res = await client.api(`/teams/${teamId}/channels/${channelId}/filesFolder`, contextUserId, contextSessionId).get();
+
+        return {
+            driveId: res.parentReference?.driveId,
+            folderId: res.id,
+            webUrl: res.webUrl,
+            name: res.name
+        };
+    } catch (error) {
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to get channel files folder: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'getChannelFilesFolder',
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+/**
+ * Lists files in a channel's Files tab (SharePoint folder).
+ * @param {string} teamId - Team ID
+ * @param {string} channelId - Channel ID
+ * @param {object} options - Query options { limit }
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<Array<object>>} Array of normalized file objects
+ */
+async function listChannelFiles(teamId, channelId, options = {}, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!teamId || !channelId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Team ID and Channel ID are required',
+            'warning',
+            { method: 'listChannelFiles' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams listChannelFiles operation started', {
+            method: 'listChannelFiles',
+            teamId: teamId.substring(0, 20) + '...',
+            channelId: channelId.substring(0, 20) + '...',
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        // First get the files folder info
+        const folderInfo = await getChannelFilesFolder(teamId, channelId, req, userId, sessionId);
+
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+        const top = options.limit || options.top || 50;
+
+        // List children of the files folder
+        const res = await client.api(`/drives/${folderInfo.driveId}/items/${folderInfo.folderId}/children?$top=${top}`, contextUserId, contextSessionId).get();
+        const files = (res.value || []).map(normalizeChannelFile);
+
+        const executionTime = Date.now() - startTime;
+
+        if (contextUserId) {
+            MonitoringService.info('Listed channel files successfully', {
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                fileCount: files.length,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return files;
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to list channel files: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'listChannelFiles',
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+/**
+ * Uploads a file to a channel's Files tab.
+ * @param {string} teamId - Team ID
+ * @param {string} channelId - Channel ID
+ * @param {object} fileData - File details { fileName, content, contentType, isBase64 }
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} Uploaded file object
+ */
+async function uploadFileToChannel(teamId, channelId, fileData, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!teamId || !channelId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Team ID and Channel ID are required',
+            'warning',
+            { method: 'uploadFileToChannel' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (!fileData?.fileName) {
+        const error = ErrorService.createError(
+            'teams',
+            'File name is required',
+            'warning',
+            { method: 'uploadFileToChannel' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (!fileData?.content) {
+        const error = ErrorService.createError(
+            'teams',
+            'File content is required',
+            'warning',
+            { method: 'uploadFileToChannel' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams uploadFileToChannel operation started', {
+            method: 'uploadFileToChannel',
+            teamId: teamId.substring(0, 20) + '...',
+            channelId: channelId.substring(0, 20) + '...',
+            fileName: fileData.fileName,
+            contentLength: fileData.content.length,
+            isBase64: !!fileData.isBase64,
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        // First get the files folder info
+        const folderInfo = await getChannelFilesFolder(teamId, channelId, req, userId, sessionId);
+
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        // Prepare content - convert from base64 if needed
+        let content = fileData.content;
+        if (fileData.isBase64) {
+            content = Buffer.from(fileData.content, 'base64');
+        }
+
+        // Upload file using simple upload (for files < 4MB)
+        const encodedFileName = encodeURIComponent(fileData.fileName);
+        const uploadPath = `/drives/${folderInfo.driveId}/items/${folderInfo.folderId}:/${encodedFileName}:/content`;
+
+        // For text content, ensure it's a Buffer
+        if (typeof content === 'string') {
+            content = Buffer.from(content, 'utf8');
+        }
+
+        const res = await client.api(uploadPath, contextUserId, contextSessionId).put(content);
+
+        const file = normalizeChannelFile(res);
+
+        const executionTime = Date.now() - startTime;
+
+        if (contextUserId) {
+            MonitoringService.info('Uploaded file to channel successfully', {
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                fileId: file.id,
+                fileName: fileData.fileName,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return file;
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to upload file to channel: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'uploadFileToChannel',
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                fileName: fileData.fileName,
+                executionTimeMs: executionTime,
+                error: error.message,
+                statusCode: error.statusCode || error.code,
+                timestamp: new Date().toISOString()
+            }
+        );
+
+        MonitoringService.logError(mcpError);
+        throw mcpError;
+    }
+}
+
+/**
+ * Reads content of a file from a channel's Files tab.
+ * @param {string} teamId - Team ID
+ * @param {string} channelId - Channel ID
+ * @param {string} fileName - File name to read
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} File content { fileName, content, mimeType, size }
+ */
+async function readChannelFile(teamId, channelId, fileName, req, userId, sessionId) {
+    const startTime = Date.now();
+    const contextUserId = userId || req?.user?.userId;
+    const contextSessionId = sessionId || req?.session?.id;
+
+    if (!teamId || !channelId) {
+        const error = ErrorService.createError(
+            'teams',
+            'Team ID and Channel ID are required',
+            'warning',
+            { method: 'readChannelFile' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (!fileName) {
+        const error = ErrorService.createError(
+            'teams',
+            'File name is required',
+            'warning',
+            { method: 'readChannelFile' }
+        );
+        MonitoringService.logError(error);
+        throw error;
+    }
+
+    if (process.env.NODE_ENV === 'development') {
+        MonitoringService.debug('Teams readChannelFile operation started', {
+            method: 'readChannelFile',
+            teamId: teamId.substring(0, 20) + '...',
+            channelId: channelId.substring(0, 20) + '...',
+            fileName: fileName,
+            sessionId: contextSessionId,
+            timestamp: new Date().toISOString()
+        }, 'teams');
+    }
+
+    try {
+        // First get the files folder info
+        const folderInfo = await getChannelFilesFolder(teamId, channelId, req, userId, sessionId);
+
+        const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+        // Get file metadata first
+        const encodedFileName = encodeURIComponent(fileName);
+        const metadataPath = `/drives/${folderInfo.driveId}/items/${folderInfo.folderId}:/${encodedFileName}`;
+        const metadata = await client.api(metadataPath, contextUserId, contextSessionId).get();
+
+        // Get file content
+        const contentPath = `/drives/${folderInfo.driveId}/items/${folderInfo.folderId}:/${encodedFileName}:/content`;
+        const content = await client.api(contentPath, contextUserId, contextSessionId).get();
+
+        const executionTime = Date.now() - startTime;
+
+        // Handle different content types
+        let processedContent = content;
+        let isText = false;
+
+        // Check if content is text-based
+        const mimeType = metadata.file?.mimeType || '';
+        if (mimeType.startsWith('text/') ||
+            mimeType.includes('json') ||
+            mimeType.includes('xml') ||
+            mimeType.includes('javascript')) {
+            isText = true;
+            if (Buffer.isBuffer(content)) {
+                processedContent = content.toString('utf8');
+            }
+        } else if (Buffer.isBuffer(content)) {
+            // Convert binary content to base64
+            processedContent = content.toString('base64');
+        }
+
+        if (contextUserId) {
+            MonitoringService.info('Read channel file successfully', {
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                fileName: fileName,
+                size: metadata.size,
+                executionTimeMs: executionTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, contextUserId);
+        }
+
+        return {
+            type: 'channelFileContent',
+            fileName: metadata.name,
+            content: processedContent,
+            mimeType: metadata.file?.mimeType || null,
+            size: metadata.size,
+            isBase64: !isText && Buffer.isBuffer(content),
+            lastModifiedDateTime: metadata.lastModifiedDateTime,
+            webUrl: metadata.webUrl
+        };
+    } catch (error) {
+        const executionTime = Date.now() - startTime;
+
+        const mcpError = ErrorService.createError(
+            'teams',
+            `Failed to read channel file: ${error.message}`,
+            'error',
+            {
+                service: 'graph-teams-service',
+                method: 'readChannelFile',
+                teamId: teamId.substring(0, 20) + '...',
+                channelId: channelId.substring(0, 20) + '...',
+                fileName: fileName,
                 executionTimeMs: executionTime,
                 error: error.message,
                 statusCode: error.statusCode || error.code,
@@ -1404,6 +2236,7 @@ async function getMeetingTranscriptContent(meetingId, transcriptId, req, userId,
 module.exports = {
     // Chat operations
     getChats,
+    createChat,
     getChatMessages,
     sendChatMessage,
 
@@ -1413,6 +2246,15 @@ module.exports = {
     getChannelMessages,
     sendChannelMessage,
     replyToMessage,
+
+    // Channel management operations
+    createChannel,
+    addChannelMember,
+
+    // Channel file operations
+    listChannelFiles,
+    uploadFileToChannel,
+    readChannelFile,
 
     // Online meeting operations
     createOnlineMeeting,
@@ -1429,6 +2271,8 @@ module.exports = {
     normalizeTeamsMessage,
     normalizeTeam,
     normalizeChannel,
+    normalizeChannelMember,
+    normalizeChannelFile,
     normalizeOnlineMeeting,
     normalizeTranscript
 };

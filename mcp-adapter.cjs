@@ -119,7 +119,7 @@ const stubModuleRegistry = {
         { id: 'calendar', name: 'calendar', capabilities: ['getEvents', 'getCalendars', 'getRooms', 'getAvailability', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'findMeetingTimes', 'addAttachment', 'removeAttachment'] },
         { id: 'files', name: 'files', capabilities: ['listFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
         { id: 'people', name: 'people', capabilities: ['findPeople', 'getRelevantPeople', 'getPersonById'] },
-        { id: 'teams', name: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings', 'getMeetingTranscripts', 'getMeetingTranscriptContent'] },
+        { id: 'teams', name: 'teams', capabilities: ['listChats', 'createChat', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createTeamChannel', 'addChannelMember', 'listChannelFiles', 'uploadFileToChannel', 'readChannelFile', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings', 'getMeetingTranscripts', 'getMeetingTranscriptContent'] },
         { id: 'todo', name: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
         { id: 'contacts', name: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
         { id: 'groups', name: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] },
@@ -132,7 +132,7 @@ const stubModuleRegistry = {
             'calendar': { id: 'calendar', capabilities: ['getEvents', 'getCalendars', 'getRooms', 'getAvailability', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'findMeetingTimes', 'addAttachment', 'removeAttachment'] },
             'files': { id: 'files', capabilities: ['listFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
             'people': { id: 'people', capabilities: ['findPeople', 'getRelevantPeople', 'getPersonById'] },
-            'teams': { id: 'teams', capabilities: ['listChats', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings', 'getMeetingTranscripts', 'getMeetingTranscriptContent'] },
+            'teams': { id: 'teams', capabilities: ['listChats', 'createChat', 'getChatMessages', 'sendChatMessage', 'listJoinedTeams', 'listTeamChannels', 'getChannelMessages', 'sendChannelMessage', 'replyToMessage', 'createTeamChannel', 'addChannelMember', 'listChannelFiles', 'uploadFileToChannel', 'readChannelFile', 'createOnlineMeeting', 'getOnlineMeeting', 'getMeetingByJoinUrl', 'listOnlineMeetings', 'getMeetingTranscripts', 'getMeetingTranscriptContent'] },
             'todo': { id: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
             'contacts': { id: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
             'groups': { id: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] },
@@ -1691,6 +1691,15 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                 apiPath = '/v1/teams/chats';
                 apiMethod = 'GET';
                 break;
+            case 'teams.createChat':
+                apiPath = '/v1/teams/chats';
+                apiMethod = 'POST';
+                apiData = {
+                    members: params.members,
+                    chatType: params.chatType || 'oneOnOne',
+                    topic: params.topic
+                };
+                break;
             case 'teams.getChat':
                 if (!params.chatId) {
                     throw new Error('Chat ID is required for getChat');
@@ -1773,6 +1782,56 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                     content: params.content,
                     contentType: params.contentType || 'text'
                 };
+                break;
+            case 'teams.createTeamChannel':
+                if (!params.teamId) {
+                    throw new Error('Team ID is required for createTeamChannel');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels`;
+                apiMethod = 'POST';
+                apiData = {
+                    displayName: params.displayName,
+                    description: params.description,
+                    membershipType: params.membershipType || 'standard'
+                };
+                break;
+            case 'teams.addChannelMember':
+                if (!params.teamId || !params.channelId) {
+                    throw new Error('Team ID and Channel ID are required for addChannelMember');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels/${params.channelId}/members`;
+                apiMethod = 'POST';
+                apiData = {
+                    userEmail: params.userEmail,
+                    roles: params.roles || []
+                };
+                break;
+            case 'teams.listChannelFiles':
+                if (!params.teamId || !params.channelId) {
+                    throw new Error('Team ID and Channel ID are required for listChannelFiles');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels/${params.channelId}/files`;
+                apiMethod = 'GET';
+                break;
+            case 'teams.uploadFileToChannel':
+                if (!params.teamId || !params.channelId) {
+                    throw new Error('Team ID and Channel ID are required for uploadFileToChannel');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels/${params.channelId}/files`;
+                apiMethod = 'POST';
+                apiData = {
+                    fileName: params.fileName,
+                    content: params.content,
+                    contentType: params.contentType,
+                    isBase64: params.isBase64 || false
+                };
+                break;
+            case 'teams.readChannelFile':
+                if (!params.teamId || !params.channelId || !params.fileName) {
+                    throw new Error('Team ID, Channel ID, and File Name are required for readChannelFile');
+                }
+                apiPath = `/v1/teams/${params.teamId}/channels/${params.channelId}/files/${encodeURIComponent(params.fileName)}`;
+                apiMethod = 'GET';
                 break;
             case 'teams.listOnlineMeetings':
                 apiPath = '/v1/teams/meetings';

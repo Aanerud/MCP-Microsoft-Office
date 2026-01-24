@@ -10,6 +10,7 @@ const MonitoringService = require('../../core/monitoring-service.cjs');
 const TEAMS_CAPABILITIES = [
     // Chat operations
     'listChats',
+    'createChat',
     'getChatMessages',
     'sendChatMessage',
     // Team & channel operations
@@ -18,6 +19,13 @@ const TEAMS_CAPABILITIES = [
     'getChannelMessages',
     'sendChannelMessage',
     'replyToMessage',
+    // Channel management operations
+    'createTeamChannel',
+    'addChannelMember',
+    // Channel file operations
+    'listChannelFiles',
+    'uploadFileToChannel',
+    'readChannelFile',
     // Meeting operations
     'createOnlineMeeting',
     'getOnlineMeeting',
@@ -160,6 +168,53 @@ const TeamsModule = {
             return chats;
         } catch (error) {
             MonitoringService.error('Teams module: listChats failed', {
+                error: error.message,
+                executionTimeMs: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, userId);
+            throw error;
+        }
+    },
+
+    /**
+     * Create a new chat (1:1 or group)
+     * @param {object} chatData - Chat details { members: [{ email }], chatType, topic }
+     * @param {object} req - Express request
+     * @param {string} userId - User ID
+     * @param {string} sessionId - Session ID
+     * @returns {Promise<object>} Created chat
+     */
+    async createChat(chatData, req, userId, sessionId) {
+        const startTime = Date.now();
+        const { teamsService } = this.services || {};
+
+        if (!teamsService || typeof teamsService.createChat !== 'function') {
+            const mcpError = ErrorService.createError(
+                'teams',
+                'TeamsService not available',
+                'error',
+                { method: 'createChat', moduleId: 'teams' }
+            );
+            MonitoringService.logError(mcpError);
+            throw mcpError;
+        }
+
+        try {
+            const chat = await teamsService.createChat(chatData, req, userId, sessionId);
+            const executionTime = Date.now() - startTime;
+
+            if (userId) {
+                MonitoringService.info('Created chat via module', {
+                    chatId: chat.id,
+                    chatType: chatData.chatType || 'oneOnOne',
+                    executionTimeMs: executionTime,
+                    timestamp: new Date().toISOString()
+                }, 'teams', null, userId);
+            }
+
+            return chat;
+        } catch (error) {
+            MonitoringService.error('Teams module: createChat failed', {
                 error: error.message,
                 executionTimeMs: Date.now() - startTime,
                 timestamp: new Date().toISOString()
@@ -515,6 +570,265 @@ const TeamsModule = {
     },
 
     // ========================================================================
+    // CHANNEL MANAGEMENT OPERATIONS
+    // ========================================================================
+
+    /**
+     * Create a new channel in a team
+     * @param {string} teamId - Team ID
+     * @param {object} channelData - Channel details { displayName, description, membershipType }
+     * @param {object} req - Express request
+     * @param {string} userId - User ID
+     * @param {string} sessionId - Session ID
+     * @returns {Promise<object>} Created channel
+     */
+    async createTeamChannel(teamId, channelData, req, userId, sessionId) {
+        const startTime = Date.now();
+        const { teamsService } = this.services || {};
+
+        if (!teamsService || typeof teamsService.createChannel !== 'function') {
+            const mcpError = ErrorService.createError(
+                'teams',
+                'TeamsService not available',
+                'error',
+                { method: 'createTeamChannel', moduleId: 'teams' }
+            );
+            MonitoringService.logError(mcpError);
+            throw mcpError;
+        }
+
+        try {
+            const channel = await teamsService.createChannel(teamId, channelData, req, userId, sessionId);
+            const executionTime = Date.now() - startTime;
+
+            if (userId) {
+                MonitoringService.info('Created team channel via module', {
+                    teamId: teamId.substring(0, 20) + '...',
+                    channelId: channel.id,
+                    displayName: channelData.displayName,
+                    executionTimeMs: executionTime,
+                    timestamp: new Date().toISOString()
+                }, 'teams', null, userId);
+            }
+
+            return channel;
+        } catch (error) {
+            MonitoringService.error('Teams module: createTeamChannel failed', {
+                error: error.message,
+                executionTimeMs: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, userId);
+            throw error;
+        }
+    },
+
+    /**
+     * Add a member to a channel (for private channels)
+     * @param {string} teamId - Team ID
+     * @param {string} channelId - Channel ID
+     * @param {object} memberData - Member details { userEmail, roles }
+     * @param {object} req - Express request
+     * @param {string} userId - User ID
+     * @param {string} sessionId - Session ID
+     * @returns {Promise<object>} Added member
+     */
+    async addChannelMember(teamId, channelId, memberData, req, userId, sessionId) {
+        const startTime = Date.now();
+        const { teamsService } = this.services || {};
+
+        if (!teamsService || typeof teamsService.addChannelMember !== 'function') {
+            const mcpError = ErrorService.createError(
+                'teams',
+                'TeamsService not available',
+                'error',
+                { method: 'addChannelMember', moduleId: 'teams' }
+            );
+            MonitoringService.logError(mcpError);
+            throw mcpError;
+        }
+
+        try {
+            const member = await teamsService.addChannelMember(teamId, channelId, memberData, req, userId, sessionId);
+            const executionTime = Date.now() - startTime;
+
+            if (userId) {
+                MonitoringService.info('Added channel member via module', {
+                    teamId: teamId.substring(0, 20) + '...',
+                    channelId: channelId.substring(0, 20) + '...',
+                    memberId: member.id,
+                    executionTimeMs: executionTime,
+                    timestamp: new Date().toISOString()
+                }, 'teams', null, userId);
+            }
+
+            return member;
+        } catch (error) {
+            MonitoringService.error('Teams module: addChannelMember failed', {
+                error: error.message,
+                executionTimeMs: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, userId);
+            throw error;
+        }
+    },
+
+    // ========================================================================
+    // CHANNEL FILE OPERATIONS
+    // ========================================================================
+
+    /**
+     * List files in a channel's Files tab
+     * @param {string} teamId - Team ID
+     * @param {string} channelId - Channel ID
+     * @param {object} options - Query options { limit }
+     * @param {object} req - Express request
+     * @param {string} userId - User ID
+     * @param {string} sessionId - Session ID
+     * @returns {Promise<Array<object>>} Array of files
+     */
+    async listChannelFiles(teamId, channelId, options = {}, req, userId, sessionId) {
+        const startTime = Date.now();
+        const { teamsService } = this.services || {};
+
+        if (!teamsService || typeof teamsService.listChannelFiles !== 'function') {
+            const mcpError = ErrorService.createError(
+                'teams',
+                'TeamsService not available',
+                'error',
+                { method: 'listChannelFiles', moduleId: 'teams' }
+            );
+            MonitoringService.logError(mcpError);
+            throw mcpError;
+        }
+
+        try {
+            const files = await teamsService.listChannelFiles(teamId, channelId, options, req, userId, sessionId);
+            const executionTime = Date.now() - startTime;
+
+            if (userId) {
+                MonitoringService.info('Listed channel files via module', {
+                    teamId: teamId.substring(0, 20) + '...',
+                    channelId: channelId.substring(0, 20) + '...',
+                    fileCount: files.length,
+                    executionTimeMs: executionTime,
+                    timestamp: new Date().toISOString()
+                }, 'teams', null, userId);
+            }
+
+            return files;
+        } catch (error) {
+            MonitoringService.error('Teams module: listChannelFiles failed', {
+                error: error.message,
+                executionTimeMs: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, userId);
+            throw error;
+        }
+    },
+
+    /**
+     * Upload a file to a channel's Files tab
+     * @param {string} teamId - Team ID
+     * @param {string} channelId - Channel ID
+     * @param {object} fileData - File details { fileName, content, contentType, isBase64 }
+     * @param {object} req - Express request
+     * @param {string} userId - User ID
+     * @param {string} sessionId - Session ID
+     * @returns {Promise<object>} Uploaded file
+     */
+    async uploadFileToChannel(teamId, channelId, fileData, req, userId, sessionId) {
+        const startTime = Date.now();
+        const { teamsService } = this.services || {};
+
+        if (!teamsService || typeof teamsService.uploadFileToChannel !== 'function') {
+            const mcpError = ErrorService.createError(
+                'teams',
+                'TeamsService not available',
+                'error',
+                { method: 'uploadFileToChannel', moduleId: 'teams' }
+            );
+            MonitoringService.logError(mcpError);
+            throw mcpError;
+        }
+
+        try {
+            const file = await teamsService.uploadFileToChannel(teamId, channelId, fileData, req, userId, sessionId);
+            const executionTime = Date.now() - startTime;
+
+            if (userId) {
+                MonitoringService.info('Uploaded file to channel via module', {
+                    teamId: teamId.substring(0, 20) + '...',
+                    channelId: channelId.substring(0, 20) + '...',
+                    fileId: file.id,
+                    fileName: fileData.fileName,
+                    executionTimeMs: executionTime,
+                    timestamp: new Date().toISOString()
+                }, 'teams', null, userId);
+            }
+
+            return file;
+        } catch (error) {
+            MonitoringService.error('Teams module: uploadFileToChannel failed', {
+                error: error.message,
+                executionTimeMs: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, userId);
+            throw error;
+        }
+    },
+
+    /**
+     * Read content of a file from a channel's Files tab
+     * @param {string} teamId - Team ID
+     * @param {string} channelId - Channel ID
+     * @param {string} fileName - File name to read
+     * @param {object} req - Express request
+     * @param {string} userId - User ID
+     * @param {string} sessionId - Session ID
+     * @returns {Promise<object>} File content
+     */
+    async readChannelFile(teamId, channelId, fileName, req, userId, sessionId) {
+        const startTime = Date.now();
+        const { teamsService } = this.services || {};
+
+        if (!teamsService || typeof teamsService.readChannelFile !== 'function') {
+            const mcpError = ErrorService.createError(
+                'teams',
+                'TeamsService not available',
+                'error',
+                { method: 'readChannelFile', moduleId: 'teams' }
+            );
+            MonitoringService.logError(mcpError);
+            throw mcpError;
+        }
+
+        try {
+            const content = await teamsService.readChannelFile(teamId, channelId, fileName, req, userId, sessionId);
+            const executionTime = Date.now() - startTime;
+
+            if (userId) {
+                MonitoringService.info('Read channel file via module', {
+                    teamId: teamId.substring(0, 20) + '...',
+                    channelId: channelId.substring(0, 20) + '...',
+                    fileName: fileName,
+                    size: content.size,
+                    executionTimeMs: executionTime,
+                    timestamp: new Date().toISOString()
+                }, 'teams', null, userId);
+            }
+
+            return content;
+        } catch (error) {
+            MonitoringService.error('Teams module: readChannelFile failed', {
+                error: error.message,
+                executionTimeMs: Date.now() - startTime,
+                timestamp: new Date().toISOString()
+            }, 'teams', null, userId);
+            throw error;
+        }
+    },
+
+    // ========================================================================
     // MEETING OPERATIONS
     // ========================================================================
 
@@ -825,6 +1139,9 @@ const TeamsModule = {
             case 'listChats':
                 return this.listChats(params, req, userId, sessionId);
 
+            case 'createChat':
+                return this.createChat(params, req, userId, sessionId);
+
             case 'getChatMessages':
                 return this.getChatMessages(params.chatId, params, req, userId, sessionId);
 
@@ -846,6 +1163,23 @@ const TeamsModule = {
 
             case 'replyToMessage':
                 return this.replyToMessage(params.teamId, params.channelId, params.messageId, params, req, userId, sessionId);
+
+            // Channel management intents
+            case 'createTeamChannel':
+                return this.createTeamChannel(params.teamId, params, req, userId, sessionId);
+
+            case 'addChannelMember':
+                return this.addChannelMember(params.teamId, params.channelId, params, req, userId, sessionId);
+
+            // Channel file intents
+            case 'listChannelFiles':
+                return this.listChannelFiles(params.teamId, params.channelId, params, req, userId, sessionId);
+
+            case 'uploadFileToChannel':
+                return this.uploadFileToChannel(params.teamId, params.channelId, params, req, userId, sessionId);
+
+            case 'readChannelFile':
+                return this.readChannelFile(params.teamId, params.channelId, params.fileName, req, userId, sessionId);
 
             // Meeting intents
             case 'createOnlineMeeting':

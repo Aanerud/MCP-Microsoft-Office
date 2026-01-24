@@ -187,6 +187,7 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
         // Teams module tools - Chat operations
         listChats: { moduleName: 'teams', methodName: 'listChats' },
         getChats: { moduleName: 'teams', methodName: 'listChats' },
+        createChat: { moduleName: 'teams', methodName: 'createChat' },
         getChatMessages: { moduleName: 'teams', methodName: 'getChatMessages' },
         sendChatMessage: { moduleName: 'teams', methodName: 'sendChatMessage' },
         // Teams module tools - Team & channel operations

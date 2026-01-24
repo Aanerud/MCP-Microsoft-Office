@@ -28,6 +28,15 @@ const schemas = {
         contentType: Joi.string().valid('text', 'html').optional().default('text')
     }),
 
+    createChat: Joi.object({
+        members: Joi.array().items(Joi.object({
+            email: Joi.string().email().required(),
+            roles: Joi.array().items(Joi.string().valid('owner')).optional()
+        })).min(1).required(),
+        chatType: Joi.string().valid('oneOnOne', 'group').default('oneOnOne'),
+        topic: Joi.string().max(250).optional()
+    }),
+
     // Team & channel schemas
     listTeams: Joi.object({
         limit: Joi.number().integer().min(1).max(100).optional().default(100)
@@ -46,6 +55,34 @@ const schemas = {
     replyToMessage: Joi.object({
         content: Joi.string().min(1).max(10000).required(),
         contentType: Joi.string().valid('text', 'html').optional().default('text')
+    }),
+
+    // Channel management schemas
+    createTeamChannel: Joi.object({
+        displayName: Joi.string().min(1).max(50).required(),
+        description: Joi.string().max(1024).optional(),
+        membershipType: Joi.string().valid('standard', 'private', 'shared').default('standard')
+    }),
+
+    addChannelMember: Joi.object({
+        userEmail: Joi.string().email().required(),
+        roles: Joi.array().items(Joi.string().valid('owner')).default([])
+    }),
+
+    // Channel files schemas
+    listChannelFiles: Joi.object({
+        limit: Joi.number().integer().min(1).max(100).default(50)
+    }),
+
+    uploadFileToChannel: Joi.object({
+        fileName: Joi.string().min(1).max(256).required(),
+        content: Joi.string().required(),
+        contentType: Joi.string().max(100).optional(),
+        isBase64: Joi.boolean().default(false)
+    }),
+
+    readChannelFile: Joi.object({
+        // fileName comes from URL params, not body
     }),
 
     // Meeting schemas
@@ -131,6 +168,48 @@ function createTeamsController({ teamsModule }) {
                 res.json({ chats, count: chats.length });
             } catch (error) {
                 handleControllerError(res, error, 'listChats', userId, sessionId, startTime);
+            }
+        },
+
+        /**
+         * Create a new chat (1:1 or group)
+         * POST /api/v1/teams/chats
+         */
+        async createChat(req, res) {
+            const { userId = null, deviceId = null } = req.user || {};
+            const sessionId = req.session?.id;
+            const startTime = Date.now();
+
+            try {
+                const { error: validationError, value: validatedData } = validateAndLog(
+                    req,
+                    schemas.createChat,
+                    'createChat',
+                    { userId, deviceId }
+                );
+
+                if (validationError) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: validationError.details[0].message
+                    });
+                }
+
+                const chat = await teamsModule.createChat(validatedData, req, userId, sessionId);
+
+                if (userId) {
+                    MonitoringService.info('Created chat successfully', {
+                        chatId: chat.id,
+                        chatType: validatedData.chatType,
+                        memberCount: validatedData.members.length,
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'teams', null, userId);
+                }
+
+                res.status(201).json({ chat, success: true });
+            } catch (error) {
+                handleControllerError(res, error, 'createChat', userId, sessionId, startTime);
             }
         },
 
@@ -459,6 +538,262 @@ function createTeamsController({ teamsModule }) {
                 res.status(201).json({ reply, success: true });
             } catch (error) {
                 handleControllerError(res, error, 'replyToMessage', userId, sessionId, startTime);
+            }
+        },
+
+        // ====================================================================
+        // CHANNEL MANAGEMENT ENDPOINTS
+        // ====================================================================
+
+        /**
+         * Create a new channel in a team
+         * POST /api/v1/teams/:teamId/channels
+         */
+        async createTeamChannel(req, res) {
+            const { userId = null, deviceId = null } = req.user || {};
+            const sessionId = req.session?.id;
+            const startTime = Date.now();
+            const { teamId } = req.params;
+
+            try {
+                if (!teamId) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'Team ID is required'
+                    });
+                }
+
+                const { error: validationError, value: validatedData } = validateAndLog(
+                    req,
+                    schemas.createTeamChannel,
+                    'createTeamChannel',
+                    { userId, deviceId }
+                );
+
+                if (validationError) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: validationError.details[0].message
+                    });
+                }
+
+                const channel = await teamsModule.createTeamChannel(teamId, validatedData, req, userId, sessionId);
+
+                if (userId) {
+                    MonitoringService.info('Created team channel successfully', {
+                        teamId: teamId.substring(0, 20) + '...',
+                        channelId: channel.id,
+                        displayName: validatedData.displayName,
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'teams', null, userId);
+                }
+
+                res.status(201).json({ channel, success: true });
+            } catch (error) {
+                handleControllerError(res, error, 'createTeamChannel', userId, sessionId, startTime);
+            }
+        },
+
+        /**
+         * Add a member to a channel
+         * POST /api/v1/teams/:teamId/channels/:channelId/members
+         */
+        async addChannelMember(req, res) {
+            const { userId = null, deviceId = null } = req.user || {};
+            const sessionId = req.session?.id;
+            const startTime = Date.now();
+            const { teamId, channelId } = req.params;
+
+            try {
+                if (!teamId || !channelId) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'Team ID and Channel ID are required'
+                    });
+                }
+
+                const { error: validationError, value: validatedData } = validateAndLog(
+                    req,
+                    schemas.addChannelMember,
+                    'addChannelMember',
+                    { userId, deviceId }
+                );
+
+                if (validationError) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: validationError.details[0].message
+                    });
+                }
+
+                const member = await teamsModule.addChannelMember(teamId, channelId, validatedData, req, userId, sessionId);
+
+                if (userId) {
+                    MonitoringService.info('Added channel member successfully', {
+                        teamId: teamId.substring(0, 20) + '...',
+                        channelId: channelId.substring(0, 20) + '...',
+                        memberId: member.id,
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'teams', null, userId);
+                }
+
+                res.status(201).json({ member, success: true });
+            } catch (error) {
+                handleControllerError(res, error, 'addChannelMember', userId, sessionId, startTime);
+            }
+        },
+
+        // ====================================================================
+        // CHANNEL FILES ENDPOINTS
+        // ====================================================================
+
+        /**
+         * List files in a channel
+         * GET /api/v1/teams/:teamId/channels/:channelId/files
+         */
+        async listChannelFiles(req, res) {
+            const { userId = null, deviceId = null } = req.user || {};
+            const sessionId = req.session?.id;
+            const startTime = Date.now();
+            const { teamId, channelId } = req.params;
+
+            try {
+                if (!teamId || !channelId) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'Team ID and Channel ID are required'
+                    });
+                }
+
+                const { error: validationError, value: validatedData } = validateAndLog(
+                    req,
+                    schemas.listChannelFiles,
+                    'listChannelFiles',
+                    { userId, deviceId }
+                );
+
+                if (validationError) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: validationError.details[0].message
+                    });
+                }
+
+                const files = await teamsModule.listChannelFiles(teamId, channelId, validatedData, req, userId, sessionId);
+
+                if (userId) {
+                    MonitoringService.info('Listed channel files successfully', {
+                        teamId: teamId.substring(0, 20) + '...',
+                        channelId: channelId.substring(0, 20) + '...',
+                        fileCount: files.length,
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'teams', null, userId);
+                }
+
+                res.json({ files, count: files.length });
+            } catch (error) {
+                handleControllerError(res, error, 'listChannelFiles', userId, sessionId, startTime);
+            }
+        },
+
+        /**
+         * Upload a file to a channel
+         * POST /api/v1/teams/:teamId/channels/:channelId/files
+         */
+        async uploadFileToChannel(req, res) {
+            const { userId = null, deviceId = null } = req.user || {};
+            const sessionId = req.session?.id;
+            const startTime = Date.now();
+            const { teamId, channelId } = req.params;
+
+            try {
+                if (!teamId || !channelId) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'Team ID and Channel ID are required'
+                    });
+                }
+
+                const { error: validationError, value: validatedData } = validateAndLog(
+                    req,
+                    schemas.uploadFileToChannel,
+                    'uploadFileToChannel',
+                    { userId, deviceId }
+                );
+
+                if (validationError) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: validationError.details[0].message
+                    });
+                }
+
+                const file = await teamsModule.uploadFileToChannel(teamId, channelId, validatedData, req, userId, sessionId);
+
+                if (userId) {
+                    MonitoringService.info('Uploaded file to channel successfully', {
+                        teamId: teamId.substring(0, 20) + '...',
+                        channelId: channelId.substring(0, 20) + '...',
+                        fileId: file.id,
+                        fileName: validatedData.fileName,
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'teams', null, userId);
+                }
+
+                res.status(201).json({ file, success: true });
+            } catch (error) {
+                handleControllerError(res, error, 'uploadFileToChannel', userId, sessionId, startTime);
+            }
+        },
+
+        /**
+         * Read content of a file from a channel
+         * GET /api/v1/teams/:teamId/channels/:channelId/files/:fileName
+         */
+        async readChannelFile(req, res) {
+            const { userId = null } = req.user || {};
+            const sessionId = req.session?.id;
+            const startTime = Date.now();
+            const { teamId, channelId, fileName } = req.params;
+
+            try {
+                if (!teamId || !channelId) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'Team ID and Channel ID are required'
+                    });
+                }
+
+                if (!fileName) {
+                    return res.status(400).json({
+                        error: 'INVALID_REQUEST',
+                        error_description: 'File name is required'
+                    });
+                }
+
+                // Decode the filename (it comes URL-encoded from the route)
+                const decodedFileName = decodeURIComponent(fileName);
+
+                const content = await teamsModule.readChannelFile(teamId, channelId, decodedFileName, req, userId, sessionId);
+
+                if (userId) {
+                    MonitoringService.info('Read channel file successfully', {
+                        teamId: teamId.substring(0, 20) + '...',
+                        channelId: channelId.substring(0, 20) + '...',
+                        fileName: decodedFileName,
+                        size: content.size,
+                        duration: Date.now() - startTime,
+                        timestamp: new Date().toISOString()
+                    }, 'teams', null, userId);
+                }
+
+                res.json({ file: content });
+            } catch (error) {
+                handleControllerError(res, error, 'readChannelFile', userId, sessionId, startTime);
             }
         },
 
