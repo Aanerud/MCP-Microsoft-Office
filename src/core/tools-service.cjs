@@ -198,6 +198,13 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
         getChannelMessages: { moduleName: 'teams', methodName: 'getChannelMessages' },
         sendChannelMessage: { moduleName: 'teams', methodName: 'sendChannelMessage' },
         replyToMessage: { moduleName: 'teams', methodName: 'replyToMessage' },
+        // Teams module tools - Channel management operations
+        createTeamChannel: { moduleName: 'teams', methodName: 'createTeamChannel' },
+        addChannelMember: { moduleName: 'teams', methodName: 'addChannelMember' },
+        // Teams module tools - Channel file operations
+        listChannelFiles: { moduleName: 'teams', methodName: 'listChannelFiles' },
+        uploadFileToChannel: { moduleName: 'teams', methodName: 'uploadFileToChannel' },
+        readChannelFile: { moduleName: 'teams', methodName: 'readChannelFile' },
         // Teams module tools - Meeting operations
         createOnlineMeeting: { moduleName: 'teams', methodName: 'createOnlineMeeting' },
         createTeamsMeeting: { moduleName: 'teams', methodName: 'createOnlineMeeting' },
