@@ -18,6 +18,7 @@ const logController = require('./controllers/log-controller.cjs');
 const authController = require('./controllers/auth-controller.cjs');
 const deviceAuthController = require('./controllers/device-auth-controller.cjs');
 const externalTokenController = require('./controllers/external-token-controller.cjs');
+const graphTokenExchangeController = require('./controllers/graph-token-exchange-controller.cjs');
 const adapterController = require('./controllers/adapter-controller.cjs');
 const mcpTransportController = require('./controllers/mcp-transport-controller.cjs');
 const ErrorService = require('../core/error-service.cjs');
@@ -340,7 +341,7 @@ function registerRoutes(router) {
                 // Mail tools
                 'Mail.Read': ['getInbox', 'readMail', 'readMailDetails', 'search', 'getEmailDetails', 'getMailAttachments'],
                 'Mail.ReadWrite': ['getInbox', 'readMail', 'readMailDetails', 'search', 'getEmailDetails', 'getMailAttachments', 'markAsRead', 'markEmailRead', 'flagMail', 'flagEmail', 'addMailAttachment', 'removeMailAttachment'],
-                'Mail.Send': ['sendEmail', 'sendMail'],
+                'Mail.Send': ['sendEmail', 'sendMail', 'replyToMail', 'replyToEmail'],
                 // Calendar tools
                 'Calendars.Read': ['getEvents', 'getAvailability', 'getCalendars', 'getRooms', 'search'],
                 'Calendars.ReadWrite': ['getEvents', 'getAvailability', 'getCalendars', 'getRooms', 'search', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'findMeetingTimes', 'addAttachment', 'removeAttachment'],
@@ -411,6 +412,8 @@ function registerRoutes(router) {
     // IMPORTANT: Route order matters! Put specific routes before parametrized routes
     // Route order problem fixed: Specific routes now come before the :id pattern
     mailRouter.patch('/:id/read', placeholderRateLimit, mailController.markAsRead); // Corresponds to /v1/mail/:id/read
+    // Reply to email route
+    mailRouter.post('/:id/reply', placeholderRateLimit, mailController.replyToMail); // Corresponds to /v1/mail/:id/reply
     // Flag/unflag email route
     mailRouter.post('/flag', placeholderRateLimit, mailController.flagMail); // Corresponds to /v1/mail/flag
     // Mail attachment routes
@@ -671,6 +674,10 @@ function registerRoutes(router) {
 
     // External token login endpoint - SEC-3: Rate limited to prevent brute-force
     authRouter.post('/external-token/login', authRateLimit, externalTokenController.loginWithToken);
+
+    // Graph token exchange endpoint - exchanges MS Graph tokens for MCP JWTs
+    // Used by Synthetic Employees and other ROPC clients
+    authRouter.post('/graph-token-exchange', authRateLimit, graphTokenExchangeController.exchange);
 
     // External token management endpoints - requires authentication
     authRouter.post('/external-token', requireAuth, externalTokenController.inject);

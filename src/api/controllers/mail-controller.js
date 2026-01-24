@@ -80,13 +80,7 @@ const schemas = {
     markAsRead: Joi.object({
         isRead: Joi.boolean().optional().default(true)
     }),
-
-    replyToMail: Joi.object({
-        body: Joi.string().min(1).required(),
-        contentType: Joi.string().valid('Text', 'HTML').optional().default('Text'),
-        replyAll: Joi.boolean().optional().default(false)
-    }),
-
+    
     getMailAttachments: Joi.object({
         id: Joi.string().required()
     }),
@@ -1444,163 +1438,13 @@ module.exports = ({ mailModule }) => ({
                 }, 'mail');
             }
             
-            res.status(500).json({
+            res.status(500).json({ 
                 error: 'EMAIL_READ_STATUS_UPDATE_FAILED',
                 error_description: 'Failed to update email read status'
             });
         }
     },
-
-    /**
-     * POST /api/mail/:id/reply
-     * Reply to an email
-     */
-    async replyToMail(req, res) {
-        const startTime = Date.now();
-
-        // Extract user context from auth middleware
-        const { userId = null, deviceId = null } = req.user || {};
-        const sessionId = req.session?.id;
-
-        try {
-            // Pattern 1: Development Debug Logs
-            if (process.env.NODE_ENV === 'development') {
-                MonitoringService.debug('Processing replyToMail request', {
-                    method: req.method,
-                    path: req.path,
-                    params: req.params,
-                    sessionId,
-                    userAgent: req.get('User-Agent'),
-                    timestamp: new Date().toISOString(),
-                    userId,
-                    deviceId
-                }, 'mail');
-            }
-
-            // Ensure content type is set explicitly
-            res.setHeader('Content-Type', 'application/json');
-
-            // Get message ID from URL params
-            const messageId = req.params.id;
-            if (!messageId) {
-                return res.status(400).json({
-                    error: 'Invalid request',
-                    details: [{ message: 'Message ID is required' }]
-                });
-            }
-
-            // Validate body parameters
-            const { error: bodyError, value: bodyValue } = schemas.replyToMail.validate(req.body);
-            if (bodyError) {
-                const validationError = ErrorService.createError(
-                    ErrorService.CATEGORIES.API,
-                    'replyToMail body validation error',
-                    ErrorService.SEVERITIES.WARNING,
-                    {
-                        details: bodyError.details,
-                        endpoint: 'replyToMail',
-                        userId,
-                        deviceId
-                    },
-                    null,
-                    userId,
-                    deviceId
-                );
-                return res.status(400).json({ error: 'Invalid request', details: bodyError.details });
-            }
-
-            // Check if module supports replyToEmail
-            if (typeof mailModule.replyToEmail !== 'function') {
-                MonitoringService.warn('replyToEmail method not implemented in mail module', {
-                    endpoint: 'replyToMail',
-                    userId,
-                    deviceId
-                }, 'mail', null, userId, deviceId);
-                return res.status(501).json({
-                    error: 'NOT_IMPLEMENTED',
-                    error_description: 'Reply functionality is not implemented'
-                });
-            }
-
-            // Call the mail module
-            const result = await mailModule.replyToEmail(messageId, {
-                body: bodyValue.body,
-                contentType: bodyValue.contentType,
-                replyAll: bodyValue.replyAll
-            }, req);
-
-            // Track performance
-            const duration = Date.now() - startTime;
-            MonitoringService.trackMetric('mail.replyToMail.duration', duration, {
-                messageId,
-                replyAll: bodyValue.replyAll,
-                success: true,
-                userId,
-                deviceId
-            });
-
-            // Pattern 2: User Activity Logs
-            if (userId) {
-                MonitoringService.info('Email reply sent successfully', {
-                    messageId,
-                    replyAll: bodyValue.replyAll,
-                    duration,
-                    timestamp: new Date().toISOString()
-                }, 'mail', null, userId);
-            }
-
-            res.json(result);
-        } catch (err) {
-            // Track error metrics
-            const duration = Date.now() - startTime;
-            MonitoringService.trackMetric('mail.replyToMail.error', 1, {
-                errorMessage: err.message,
-                duration,
-                success: false,
-                userId,
-                deviceId
-            });
-
-            // Pattern 3: Infrastructure Error Logging
-            const mcpError = ErrorService.createError(
-                'mail',
-                'Failed to reply to email',
-                'error',
-                {
-                    endpoint: '/api/mail/:id/reply',
-                    error: err.message,
-                    stack: err.stack,
-                    operation: 'replyToMail',
-                    userId,
-                    deviceId,
-                    timestamp: new Date().toISOString()
-                }
-            );
-            MonitoringService.logError(mcpError);
-
-            // Pattern 4: User Error Tracking
-            if (userId) {
-                MonitoringService.error('Email reply failed', {
-                    error: err.message,
-                    operation: 'replyToMail',
-                    timestamp: new Date().toISOString()
-                }, 'mail', null, userId);
-            } else if (sessionId) {
-                MonitoringService.error('Email reply failed', {
-                    sessionId,
-                    error: err.message,
-                    operation: 'replyToMail',
-                    timestamp: new Date().toISOString()
-                }, 'mail');
-            }
-
-            res.status(500).json({
-                error: 'EMAIL_REPLY_FAILED',
-                error_description: 'Failed to reply to email'
-            });
-        }
-    },
-
+    
     /**
      * GET /api/mail/attachments
      * Get attachments for a specific email

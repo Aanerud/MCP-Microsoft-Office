@@ -149,14 +149,14 @@ async function executeTool(toolName, args, req) {
     }
 
     // Execute the module method
-    const handler = module[methodName];
-    if (typeof handler !== 'function') {
+    if (typeof module[methodName] !== 'function') {
         throw new Error(`Method not found: ${moduleName}.${methodName}`);
     }
 
     // Call the handler with args, access token, and request object
     // Module methods expect (options, req) signature for proper authentication context
-    const result = await handler({ ...args, accessToken }, req);
+    // IMPORTANT: Use .call() to preserve 'this' binding for module methods
+    const result = await module[methodName].call(module, { ...args, accessToken }, req);
 
     MonitoringService.info('MCP tool executed successfully', {
         toolName,

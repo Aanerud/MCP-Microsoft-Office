@@ -16,6 +16,7 @@
         "@microsoft/microsoft-graph-client": "^3.0.7",
         "@npmcli/fs": "^3.1.0",
         "axios": "^1.6.2",
+        "body-parser": "^2.2.2",
         "cors": "^2.8.5",
         "dotenv": "^16.5.0",
         "express": "^4.18.2",

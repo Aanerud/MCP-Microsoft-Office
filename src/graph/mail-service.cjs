@@ -1578,10 +1578,127 @@ async function removeMailAttachment(messageId, attachmentId, req, userId, sessio
   }
 }
 
+/**
+ * Replies to an email message.
+ * @param {string} messageId - The ID of the message to reply to
+ * @param {object} replyData - Reply data
+ * @param {string} replyData.body - The reply body content
+ * @param {string} [replyData.contentType] - Content type ('Text' or 'HTML'), defaults to 'Text'
+ * @param {boolean} [replyData.replyAll] - If true, reply to all recipients
+ * @param {object} req - Express request object
+ * @param {string} userId - User ID for logging context
+ * @param {string} sessionId - Session ID for logging context
+ * @returns {Promise<object>} - Result of the reply operation
+ */
+async function replyToEmail(messageId, replyData, req, userId, sessionId) {
+  const startTime = Date.now();
+
+  // Extract user context from request if not provided
+  const contextUserId = userId || req?.user?.userId;
+  const contextSessionId = sessionId || req?.session?.id;
+
+  // Pattern 1: Development Debug Logs
+  if (process.env.NODE_ENV === 'development') {
+    MonitoringService.debug('Mail replyToEmail operation started', {
+      method: 'replyToEmail',
+      messageId,
+      replyAll: replyData?.replyAll || false,
+      sessionId: contextSessionId,
+      timestamp: new Date().toISOString()
+    }, 'mail');
+  }
+
+  try {
+    // Validate required fields
+    if (!messageId) {
+      const validationError = ErrorService.createError(
+        ErrorService.CATEGORIES.VALIDATION,
+        'Message ID is required for reply',
+        ErrorService.SEVERITIES.WARNING,
+        { messageId },
+        null,
+        contextUserId
+      );
+      throw validationError;
+    }
+
+    if (!replyData?.body) {
+      const validationError = ErrorService.createError(
+        ErrorService.CATEGORIES.VALIDATION,
+        'Reply body is required',
+        ErrorService.SEVERITIES.WARNING,
+        { messageId },
+        null,
+        contextUserId
+      );
+      throw validationError;
+    }
+
+    const client = await graphClientFactory.createClient(req, contextUserId, contextSessionId);
+
+    // Determine endpoint based on replyAll flag
+    const endpoint = replyData.replyAll
+      ? `/me/messages/${messageId}/replyAll`
+      : `/me/messages/${messageId}/reply`;
+
+    // Build the reply payload
+    const payload = {
+      message: {
+        body: {
+          contentType: replyData.contentType || 'Text',
+          content: replyData.body
+        }
+      }
+    };
+
+    // Make the API call
+    await client.api(endpoint, contextUserId, contextSessionId).post(payload);
+
+    const executionTime = Date.now() - startTime;
+
+    // Pattern 2: User Activity Logs
+    if (contextUserId) {
+      MonitoringService.info('Email reply sent successfully', {
+        messageId,
+        replyAll: replyData.replyAll || false,
+        executionTimeMs: executionTime,
+        timestamp: new Date().toISOString()
+      }, 'mail', null, contextUserId);
+    }
+
+    return {
+      success: true,
+      messageId,
+      replyAll: replyData.replyAll || false
+    };
+
+  } catch (error) {
+    const executionTime = Date.now() - startTime;
+
+    // Pattern 4: User Error Tracking
+    const mcpError = ErrorService.createError(
+      ErrorService.CATEGORIES.API,
+      `Failed to reply to email: ${error.message}`,
+      ErrorService.SEVERITIES.ERROR,
+      {
+        messageId,
+        originalError: error.message,
+        executionTimeMs: executionTime,
+        timestamp: new Date().toISOString()
+      },
+      error,
+      contextUserId
+    );
+
+    throw mcpError;
+  }
+}
+
 module.exports = {
   getInbox,
   searchEmails,
   sendEmail,
+  replyToEmail,
   flagEmail,
   getAttachments,
   getInboxRaw,

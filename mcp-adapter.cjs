@@ -115,7 +115,7 @@ let adapterState = {
 const stubModuleRegistry = {
     getAllModules: () => [
         { id: 'search', name: 'search', capabilities: ['search'] },
-        { id: 'mail', name: 'mail', capabilities: ['getInbox', 'readMail', 'readMailDetails', 'sendEmail', 'sendMail', 'flagEmail', 'flagMail', 'getEmailDetails', 'markAsRead', 'markEmailRead', 'getMailAttachments', 'addMailAttachment', 'removeMailAttachment'] },
+        { id: 'mail', name: 'mail', capabilities: ['getInbox', 'readMail', 'readMailDetails', 'sendEmail', 'sendMail', 'replyToMail', 'replyToEmail', 'flagEmail', 'flagMail', 'getEmailDetails', 'markAsRead', 'markEmailRead', 'getMailAttachments', 'addMailAttachment', 'removeMailAttachment'] },
         { id: 'calendar', name: 'calendar', capabilities: ['getEvents', 'getCalendars', 'getRooms', 'getAvailability', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'findMeetingTimes', 'addAttachment', 'removeAttachment'] },
         { id: 'files', name: 'files', capabilities: ['listFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
         { id: 'people', name: 'people', capabilities: ['findPeople', 'getRelevantPeople', 'getPersonById'] },
@@ -128,7 +128,7 @@ const stubModuleRegistry = {
     getModule: (moduleName) => {
         const modules = {
             'search': { id: 'search', capabilities: ['search'] },
-            'mail': { id: 'mail', capabilities: ['getInbox', 'readMail', 'readMailDetails', 'sendEmail', 'sendMail', 'flagEmail', 'flagMail', 'getEmailDetails', 'markAsRead', 'markEmailRead', 'getMailAttachments', 'addMailAttachment', 'removeMailAttachment'] },
+            'mail': { id: 'mail', capabilities: ['getInbox', 'readMail', 'readMailDetails', 'sendEmail', 'sendMail', 'replyToMail', 'replyToEmail', 'flagEmail', 'flagMail', 'getEmailDetails', 'markAsRead', 'markEmailRead', 'getMailAttachments', 'addMailAttachment', 'removeMailAttachment'] },
             'calendar': { id: 'calendar', capabilities: ['getEvents', 'getCalendars', 'getRooms', 'getAvailability', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'findMeetingTimes', 'addAttachment', 'removeAttachment'] },
             'files': { id: 'files', capabilities: ['listFiles', 'downloadFile', 'uploadFile', 'getFileMetadata', 'getFileContent', 'setFileContent', 'updateFileContent', 'createSharingLink', 'getSharingLinks', 'removeSharingPermission'] },
             'people': { id: 'people', capabilities: ['findPeople', 'getRelevantPeople', 'getPersonById'] },
@@ -278,8 +278,6 @@ async function callApi(method, path, data = null, _retryCount = 0) {
                     },
                     timeout: API_TIMEOUT
                 };
-
-                console.error(`[DEBUG] callApi - method: ${method}, input path: ${path}, API_BASE_PATH: ${API_BASE_PATH}, final path: ${options.path}`);
 
                 // Add authorization header if we have an access token
                 if (deviceCredentials.accessToken) {
@@ -812,7 +810,7 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
             case 'outlook mail.readMail':
                 apiPath = '/v1/mail';
                 apiMethod = 'GET';
-                
+
                 // Add query parameters for filtering emails
                 const mailParams = [];
                 
@@ -823,7 +821,7 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                 
                 // Option to limit the number of emails
                 if (transformedParams.top || transformedParams.limit) {
-                    mailParams.push(`$top=${transformedParams.top || transformedParams.limit || 25}`);
+                    mailParams.push(`limit=${transformedParams.top || transformedParams.limit || 25}`);
                 }
                 
                 // Option to filter by read status
@@ -840,9 +838,7 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                 if (mailParams.length > 0) {
                     apiPath += `?${mailParams.join('&')}`;
                 }
-                
-                // Log the API call for debugging
-                
+
                 break;
                 
             case 'mail.sendEmail':
@@ -874,6 +870,23 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                     
                 }
                 
+                break;
+            case 'mail.replyToMail':
+            case 'mail.replyToEmail':
+            case 'mail.reply':
+                if (!transformedParams.messageId && !transformedParams.id) {
+                    throw new Error('Message ID is required for replying. Please provide a messageId parameter.');
+                }
+                const replyMessageId = transformedParams.messageId || transformedParams.id;
+                apiPath = `/v1/mail/${replyMessageId}/reply`;
+                apiMethod = 'POST';
+                // Infer content type from body
+                const replyLooksLikeHtml = /<[a-z][\s\S]*>/i.test(transformedParams.body || '');
+                apiData = {
+                    body: transformedParams.body,
+                    contentType: replyLooksLikeHtml ? 'HTML' : 'Text',
+                    replyAll: transformedParams.replyAll || false
+                };
                 break;
             case 'mail.searchMail':
             case 'mail.searchEmails':
@@ -1500,11 +1513,11 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                     
                     // Add pagination parameters
                     if (transformedParams.top || transformedParams.limit) {
-                        queryParams.push(`$top=${transformedParams.top || transformedParams.limit || 25}`);
+                        queryParams.push(`limit=${transformedParams.top || transformedParams.limit || 25}`);
                     }
-                    
+
                     if (transformedParams.skip) {
-                        queryParams.push(`$skip=${transformedParams.skip}`);
+                        queryParams.push(`skip=${transformedParams.skip}`);
                     }
                     
                     // Add query parameters to the API path
@@ -2028,7 +2041,8 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
         }
 
         // For GET requests with params, add them as query parameters
-        if (apiMethod === 'GET' && Object.keys(params).length > 0) {
+        // Skip if apiPath already contains query params (case-specific handling already added them)
+        if (apiMethod === 'GET' && Object.keys(params).length > 0 && !apiPath.includes('?')) {
             const queryParams = new URLSearchParams();
             for (const [key, value] of Object.entries(params)) {
                 // Special handling for complex objects and arrays to prevent [object Object] in URLs
@@ -2038,7 +2052,7 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
                     queryParams.append(key, value);
                 }
             }
-            
+
             if (queryParams.toString()) {
                 apiPath += `?${queryParams.toString()}`;
             }

@@ -9,9 +9,8 @@ const MonitoringService = require('../../core/monitoring-service.cjs');
 
 const MAIL_CAPABILITIES = [
     'readMail',
-    // searchMail removed - use unified 'search' tool with entityTypes: ['message']
+    'searchMail',
     'sendMail',
-    'replyToMail',
     'flagMail',
     'getMailAttachments',
     'readMailDetails',
@@ -27,51 +26,50 @@ MonitoringService.info('Mail Module initialized', {
     timestamp: new Date().toISOString()
 }, 'mail');
 
-/**
- * Helper function to redact sensitive email data from objects before logging
- * (Standalone function to avoid `this` binding issues)
- * @param {object} data - The data object to redact
- * @returns {object} Redacted copy of the data
- */
-function redactSensitiveEmailData(data) {
-    if (!data || typeof data !== 'object') {
-        return data;
-    }
-
-    // Create a deep copy to avoid modifying the original
-    const result = Array.isArray(data) ? [...data] : {...data};
-
-    // Fields that should be redacted for email data
-    const sensitiveFields = [
-        'body', 'content', 'subject', 'to', 'from', 'cc', 'bcc',
-        'emailAddress', 'address', 'email', 'recipients', 'sender',
-        'attachment', 'attachments', 'contentBytes'
-    ];
-
-    // Recursively process the object
-    for (const key in result) {
-        if (Object.prototype.hasOwnProperty.call(result, key)) {
-            // Check if this is a sensitive field
-            if (sensitiveFields.includes(key.toLowerCase())) {
-                if (typeof result[key] === 'string') {
-                    result[key] = 'REDACTED';
-                } else if (Array.isArray(result[key])) {
-                    result[key] = `[${result[key].length} items]`;
-                } else if (typeof result[key] === 'object' && result[key] !== null) {
-                    result[key] = '{REDACTED}';
+const MailModule = {
+    /**
+     * Helper method to redact sensitive email data from objects before logging
+     * @param {object} data - The data object to redact
+     * @returns {object} Redacted copy of the data
+     * @private
+     */
+    redactSensitiveEmailData(data) {
+        if (!data || typeof data !== 'object') {
+            return data;
+        }
+        
+        // Create a deep copy to avoid modifying the original
+        const result = Array.isArray(data) ? [...data] : {...data};
+        
+        // Fields that should be redacted for email data
+        const sensitiveFields = [
+            'body', 'content', 'subject', 'to', 'from', 'cc', 'bcc', 
+            'emailAddress', 'address', 'email', 'recipients', 'sender',
+            'attachment', 'attachments', 'contentBytes'
+        ];
+        
+        // Recursively process the object
+        for (const key in result) {
+            if (Object.prototype.hasOwnProperty.call(result, key)) {
+                // Check if this is a sensitive field
+                if (sensitiveFields.includes(key.toLowerCase())) {
+                    if (typeof result[key] === 'string') {
+                        result[key] = 'REDACTED';
+                    } else if (Array.isArray(result[key])) {
+                        result[key] = `[${result[key].length} items]`;
+                    } else if (typeof result[key] === 'object' && result[key] !== null) {
+                        result[key] = '{REDACTED}';
+                    }
+                } 
+                // Recursively process nested objects
+                else if (typeof result[key] === 'object' && result[key] !== null) {
+                    result[key] = this.redactSensitiveEmailData(result[key]);
                 }
             }
-            // Recursively process nested objects
-            else if (typeof result[key] === 'object' && result[key] !== null) {
-                result[key] = redactSensitiveEmailData(result[key]);
-            }
         }
-    }
-
-    return result;
-}
-
-const MailModule = {
+        
+        return result;
+    },
 
     /**
      * Fetch raw inbox data from Graph for debugging (no normalization)
@@ -87,7 +85,7 @@ const MailModule = {
             // Pattern 1: Development Debug Logs
             if (process.env.NODE_ENV === 'development') {
                 MonitoringService.debug('Getting raw inbox data', {
-                    options: redactSensitiveEmailData(options),
+                    options: this.redactSensitiveEmailData(options),
                     userId: userId ? userId.substring(0, 20) + '...' : 'anonymous',
                     sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'none',
                     timestamp: new Date().toISOString()
@@ -227,7 +225,7 @@ const MailModule = {
             // Pattern 1: Development Debug Logs
             if (process.env.NODE_ENV === 'development') {
                 MonitoringService.debug('Getting inbox emails', {
-                    options: redactSensitiveEmailData(options),
+                    options: this.redactSensitiveEmailData(options),
                     userId: userId ? userId.substring(0, 20) + '...' : 'anonymous',
                     sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'none',
                     timestamp: new Date().toISOString()
@@ -369,7 +367,7 @@ const MailModule = {
             if (process.env.NODE_ENV === 'development') {
                 MonitoringService.debug('Searching emails', {
                     query: query ? query.substring(0, 50) + '...' : 'empty',
-                    options: redactSensitiveEmailData(options),
+                    options: this.redactSensitiveEmailData(options),
                     userId: userId ? userId.substring(0, 20) + '...' : 'anonymous',
                     sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'none',
                     timestamp: new Date().toISOString()
@@ -511,7 +509,7 @@ const MailModule = {
             // Pattern 1: Development Debug Logs
             if (process.env.NODE_ENV === 'development') {
                 MonitoringService.debug('Sending email', {
-                    emailData: redactSensitiveEmailData(emailData),
+                    emailData: this.redactSensitiveEmailData(emailData),
                     userId: userId ? userId.substring(0, 20) + '...' : 'anonymous',
                     sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'none',
                     timestamp: new Date().toISOString()
@@ -724,184 +722,7 @@ const MailModule = {
             throw mcpError;
         }
     },
-
-    /**
-     * Reply to an email message
-     * @param {string} messageId - The ID of the message to reply to
-     * @param {object} replyData - Reply data
-     * @param {string} replyData.body - The reply body content
-     * @param {string} [replyData.contentType] - Content type ('Text' or 'HTML')
-     * @param {boolean} [replyData.replyAll] - If true, reply to all recipients
-     * @param {object} req - Express request object (optional)
-     * @param {string} userId - User ID for context
-     * @param {string} sessionId - Session ID for context
-     * @returns {Promise<object>} Result of the reply operation
-     */
-    async replyToEmail(messageId, replyData, req, userId, sessionId) {
-        const startTime = Date.now();
-
-        // Extract user context from req if not provided
-        if (!userId && req?.user?.userId) {
-            userId = req.user.userId;
-        }
-        if (!sessionId && req?.session?.id) {
-            sessionId = req.session.id;
-        }
-
-        try {
-            // Pattern 1: Development Debug Logs
-            if (process.env.NODE_ENV === 'development') {
-                MonitoringService.debug('Replying to email', {
-                    messageId: messageId ? messageId.substring(0, 20) + '...' : 'none',
-                    replyAll: replyData?.replyAll || false,
-                    userId: userId ? userId.substring(0, 20) + '...' : 'anonymous',
-                    sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'none',
-                    timestamp: new Date().toISOString()
-                }, 'mail');
-            }
-
-            const { graphService } = this.services || {};
-            if (!graphService || typeof graphService.replyToEmail !== 'function') {
-                // Pattern 3: Infrastructure Error Logging
-                const mcpError = ErrorService.createError(
-                    'mail',
-                    'GraphService.replyToEmail not implemented',
-                    'error',
-                    {
-                        method: 'replyToEmail',
-                        moduleId: 'mail',
-                        timestamp: new Date().toISOString()
-                    }
-                );
-                MonitoringService.logError(mcpError);
-
-                // Pattern 4: User Error Tracking
-                if (userId) {
-                    MonitoringService.error('Failed to reply to email', {
-                        error: 'GraphService not available',
-                        timestamp: new Date().toISOString()
-                    }, 'mail', null, userId);
-                } else if (sessionId) {
-                    MonitoringService.error('Failed to reply to email', {
-                        sessionId: sessionId.substring(0, 8) + '...',
-                        error: 'GraphService not available',
-                        timestamp: new Date().toISOString()
-                    }, 'mail');
-                }
-
-                throw mcpError;
-            }
-
-            // Validate required fields
-            if (!messageId) {
-                const mcpError = ErrorService.createError(
-                    'mail',
-                    'Message ID is required for reply',
-                    'warn',
-                    {
-                        method: 'replyToEmail',
-                        moduleId: 'mail',
-                        timestamp: new Date().toISOString()
-                    }
-                );
-                MonitoringService.logError(mcpError);
-                throw mcpError;
-            }
-
-            if (!replyData?.body) {
-                const mcpError = ErrorService.createError(
-                    'mail',
-                    'Reply body is required',
-                    'warn',
-                    {
-                        method: 'replyToEmail',
-                        moduleId: 'mail',
-                        timestamp: new Date().toISOString()
-                    }
-                );
-                MonitoringService.logError(mcpError);
-                throw mcpError;
-            }
-
-            // Reply via graph service
-            const result = await graphService.replyToEmail(messageId, replyData, req, userId, sessionId);
-            const executionTime = Date.now() - startTime;
-
-            // Pattern 2: User Activity Logs
-            if (userId) {
-                MonitoringService.info('Email reply sent successfully', {
-                    messageId: messageId.substring(0, 20) + '...',
-                    replyAll: replyData.replyAll || false,
-                    executionTimeMs: executionTime,
-                    timestamp: new Date().toISOString()
-                }, 'mail', null, userId);
-            } else if (sessionId) {
-                MonitoringService.info('Email reply sent with session', {
-                    sessionId: sessionId.substring(0, 8) + '...',
-                    replyAll: replyData.replyAll || false,
-                    executionTimeMs: executionTime,
-                    timestamp: new Date().toISOString()
-                }, 'mail');
-            }
-
-            return result;
-        } catch (error) {
-            const executionTime = Date.now() - startTime;
-
-            // If it's already an MCP error, just track user error and rethrow
-            if (error.category) {
-                if (userId) {
-                    MonitoringService.error('Failed to reply to email', {
-                        error: error.message,
-                        executionTimeMs: executionTime,
-                        timestamp: new Date().toISOString()
-                    }, 'mail', null, userId);
-                } else if (sessionId) {
-                    MonitoringService.error('Failed to reply to email', {
-                        sessionId: sessionId.substring(0, 8) + '...',
-                        error: error.message,
-                        executionTimeMs: executionTime,
-                        timestamp: new Date().toISOString()
-                    }, 'mail');
-                }
-                throw error;
-            }
-
-            // Pattern 3: Infrastructure Error Logging
-            const mcpError = ErrorService.createError(
-                'mail',
-                `Error replying to email: ${error.message}`,
-                'error',
-                {
-                    method: 'replyToEmail',
-                    moduleId: 'mail',
-                    stack: error.stack,
-                    executionTimeMs: executionTime,
-                    timestamp: new Date().toISOString()
-                }
-            );
-            MonitoringService.logError(mcpError);
-
-            // Pattern 4: User Error Tracking
-            if (userId) {
-                MonitoringService.error('Failed to reply to email', {
-                    error: error.message,
-                    executionTimeMs: executionTime,
-                    timestamp: new Date().toISOString()
-                }, 'mail', null, userId);
-            } else if (sessionId) {
-                MonitoringService.error('Failed to reply to email', {
-                    sessionId: sessionId.substring(0, 8) + '...',
-                    error: error.message,
-                    executionTimeMs: executionTime,
-                    timestamp: new Date().toISOString()
-                }, 'mail');
-            }
-
-            throw mcpError;
-        }
-    },
-
+    
     /**
      * Flag or unflag an email
      * @param {string} id - Email ID
@@ -1908,7 +1729,7 @@ const MailModule = {
             if (process.env.NODE_ENV === 'development') {
                 MonitoringService.debug('Handling mail intent', {
                     intent: intent,
-                    entities: redactSensitiveEmailData(entities),
+                    entities: this.redactSensitiveEmailData(entities),
                     userId: userId ? userId.substring(0, 20) + '...' : 'anonymous',
                     sessionId: sessionId ? sessionId.substring(0, 8) + '...' : 'none',
                     timestamp: new Date().toISOString()
