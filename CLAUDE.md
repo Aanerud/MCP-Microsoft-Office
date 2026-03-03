@@ -1,62 +1,61 @@
 # Claude Code Memory - MCP Microsoft Office
 
-## E2E Testing Workflow
+## E2E Testing
 
-### Prerequisites
-1. **Fresh Graph Token**: Copy a valid Microsoft Graph token to `token.txt` in project root
-2. **Local Server**: Must be running on localhost:3000
-
-### Step-by-Step Testing
+### Run Tests
 
 ```bash
-# 1. Start the local server
+# Start the server (terminal 1)
 npm run dev:web
 
-# 2. Exchange Graph token for MCP bearer token
-node tests/auth-helper.cjs
-# This reads token.txt and saves MCP token to tests/mcp-bearer-token.txt
+# Run all tests (terminal 2)
+node tests/run-all.cjs
 
-# 3. Run E2E tests (examples)
-node tests/test-calendar-today.cjs    # Calendar date filtering
-node tests/quick-mail-test.cjs        # Mail search
-node tests/e2e-search-test.cjs        # Unified search
+# Run a single module
+node tests/run-all.cjs --bucket mail --buckets-only
+
+# Run multiple modules
+node tests/run-all.cjs --bucket mail,calendar --buckets-only
+
+# Run only workflow tests
+node tests/run-all.cjs --workflows-only
 ```
 
 ### Test Structure
 
-Tests use the MCP adapter pattern:
-```javascript
-const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-
-// Load MCP bearer token (NOT the raw Graph token)
-const BEARER = fs.readFileSync(path.join(__dirname, 'mcp-bearer-token.txt'), 'utf8').trim();
-
-// Spawn MCP adapter connected to local server
-const adapter = spawn('node', [path.join(__dirname, '..', 'mcp-adapter.cjs')], {
-    env: { ...process.env, MCP_SERVER_URL: 'http://localhost:3000', MCP_BEARER_TOKEN: BEARER },
-    stdio: ['pipe', 'pipe', 'inherit']
-});
-
-// Send JSON-RPC messages via stdin, receive via stdout
-adapter.stdin.write(JSON.stringify({
-    jsonrpc: '2.0',
-    method: 'tools/call',
-    params: { name: 'getEvents', arguments: { timeframe: 'today' } },
-    id: 1
-}) + '\n');
 ```
+tests/
+  lib/           Shared infrastructure (auth, http-client, reporter, harness)
+  buckets/       One test file per module (9 files covering 78 tools)
+  workflows/     Cross-module integration tests (5 files)
+  run-all.cjs    Master test runner
+  _archive/      Old test files (reference only)
+```
+
+### How Auth Works in Tests
+
+Tests authenticate via ROPC (Resource Owner Password Credentials) — no manual token management. The test harness in `tests/lib/auth.cjs` handles:
+
+1. ROPC call to Azure AD to get a Graph token
+2. Exchange Graph token for MCP JWT via `POST /api/auth/graph-token-exchange`
+3. Use MCP JWT as Bearer token for all API calls
+
+Three test users are configured in `tests/lib/config.cjs`.
 
 ### Important Notes
 
-- **Token Flow**: Graph token → auth-helper.cjs → MCP bearer token → tests
-- **tests/ is gitignored**: Test files stay local, don't try to commit them
-- **Server logs**: Check server output for debugging (parameters passed, Graph API calls)
-- **Multi-day events**: calendarView API returns events that OVERLAP with date range, not just events starting on that date
+- **tests/ is gitignored**: test files stay local, don't try to commit them
+- **Server rate limits**: the in-memory rate limiter has a 15-minute window. Restart the server between rapid test runs.
+- **Multi-day events**: calendarView API returns events that OVERLAP with the date range, not just events starting on that date
 
-### Common Issues
+### API Parameter Reference
 
-1. **"Authentication required"**: Run `node tests/auth-helper.cjs` to refresh MCP token
-2. **"No stored token"**: Ensure token.txt has a valid Graph token, then run auth-helper
-3. **Wrong events returned**: Check if date params are being passed through the full chain (controller → module → service → Graph API)
+- `POST /calendar/events` body.contentType: lowercase `'text'` or `'html'`
+- `POST /calendar/availability`: expects `{ users: [emails], timeSlots: [...] }`
+- `POST /calendar/events/:id/accept|tentatively|decline`: body is `{ comment: string }`
+- `POST /files/upload`: expects `{ name, content }`
+- Files content/sharing endpoints: use `fileId` (not `id`) in request bodies
+- `GET /v1/mail` returns a raw array, not `{ emails: [...] }`
+- `GET /v1/mail/attachments` expects query param `id`, not `messageId`
+- `POST /v1/mail/flag` expects `{ id, flag: true }`
+- `POST /v1/mail/:id/reply` expects `{ body }`, not `{ comment }`
