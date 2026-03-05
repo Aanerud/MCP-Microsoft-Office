@@ -37,6 +37,12 @@ const RATE_LIMIT_AUTH_MAX = parseInt(process.env.RATE_LIMIT_AUTH_MAX || '20', 10
 const rateLimitStore = new Map();
 function createRateLimiter(maxRequests, windowMs = RATE_LIMIT_WINDOW_MS) {
     return (req, res, next) => {
+        // Skip rate limiting for health/status endpoints
+        const path = req.path || '';
+        if (path === '/health' || path === '/status' || path.endsWith('/health')) {
+            return next();
+        }
+
         const key = req.ip || req.connection.remoteAddress || 'unknown';
         const now = Date.now();
 

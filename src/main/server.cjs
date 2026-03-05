@@ -155,6 +155,12 @@ function setupMiddleware(expressApp, userId, sessionId) {
         max: 1000, // Limit each IP to 1000 requests per windowMs for general API
         standardHeaders: true,
         legacyHeaders: false,
+        // Skip rate limiting for health and status endpoints — these are polled frequently
+        // by monitoring, load balancers, and the MCP adapter and should not eat into the budget
+        skip: (request) => {
+            const path = request.path || '';
+            return path === '/health' || path === '/status' || path.endsWith('/health');
+        },
         // Custom key generator to handle Azure App Service IP format (may include port)
         keyGenerator: (request) => {
             const ip = request.ip || request.connection?.remoteAddress || 'unknown';
