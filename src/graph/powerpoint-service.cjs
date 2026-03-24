@@ -325,8 +325,8 @@ async function convertPresentationToPdf(fileId, req, userId, sessionId) {
       }, 'powerpoint');
     }
 
-    const client = await graphClientFactory.createClient(req);
-    const result = await client.api(`/me/drive/items/${fileId}/content?format=pdf`).get();
+    const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
+    const result = await client.api(`/me/drive/items/${fileId}/content?format=pdf`, resolvedUserId, resolvedSessionId).get();
 
     const executionTime = Date.now() - startTime;
 
@@ -410,7 +410,7 @@ async function getPresentationMetadata(fileId, req, userId, sessionId) {
 
     // Get Graph file metadata and download content
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
-    const graphMeta = await client.api(`/me/drive/items/${fileId}`).get();
+    const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
     const buffer = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
     const zip = await JSZip.loadAsync(buffer);
 

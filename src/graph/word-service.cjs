@@ -317,8 +317,8 @@ async function convertDocumentToPdf(fileId, req, userId, sessionId) {
       }, 'word');
     }
 
-    const client = await graphClientFactory.createClient(req);
-    const result = await client.api(`/me/drive/items/${fileId}/content?format=pdf`).get();
+    const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
+    const result = await client.api(`/me/drive/items/${fileId}/content?format=pdf`, resolvedUserId, resolvedSessionId).get();
 
     const executionTime = Date.now() - startTime;
 
@@ -402,7 +402,7 @@ async function getWordDocumentMetadata(fileId, req, userId, sessionId) {
 
     // Get Graph file metadata and download content
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
-    const graphMeta = await client.api(`/me/drive/items/${fileId}`).get();
+    const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
     const buffer = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
     const zip = await JSZip.loadAsync(buffer);
     const coreXml = await zip.file('docProps/core.xml')?.async('string');

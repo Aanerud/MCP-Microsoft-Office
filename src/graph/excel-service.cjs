@@ -399,7 +399,7 @@ async function getRange(fileId, sheetIdOrName, address, req, userId, sessionId) 
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${address}')`;
+      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${enc(address)}')`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).get();
       trackSuccess('get_range', Date.now() - startTime, { fileId, sheetIdOrName, address }, rUserId, rSessionId);
       return res;
@@ -426,7 +426,7 @@ async function updateRange(fileId, sheetIdOrName, address, values, req, userId, 
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${address}')`;
+      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${enc(address)}')`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).patch({ values });
       trackSuccess('update_range', Date.now() - startTime, { fileId, sheetIdOrName, address }, rUserId, rSessionId);
       return res;
@@ -452,7 +452,7 @@ async function getRangeFormat(fileId, sheetIdOrName, address, req, userId, sessi
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${address}')/format`;
+      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${enc(address)}')/format`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).get();
       trackSuccess('get_range_format', Date.now() - startTime, { fileId, sheetIdOrName, address }, rUserId, rSessionId);
       return res;
@@ -479,7 +479,7 @@ async function updateRangeFormat(fileId, sheetIdOrName, address, format, req, us
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const basePath = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${address}')/format`;
+      const basePath = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${enc(address)}')/format`;
 
       // Graph requires sub-resources (font, fill, borders, protection) to be patched at their own endpoints
       const subResources = ['font', 'fill', 'borders', 'protection'];
@@ -529,7 +529,7 @@ async function sortRange(fileId, sheetIdOrName, address, fields, req, userId, se
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${address}')/sort/apply`;
+      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${enc(address)}')/sort/apply`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).post({ fields });
       trackSuccess('sort_range', Date.now() - startTime, { fileId, sheetIdOrName, address }, rUserId, rSessionId);
       return res;
@@ -556,7 +556,7 @@ async function mergeRange(fileId, sheetIdOrName, address, across, req, userId, s
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${address}')/merge`;
+      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${enc(address)}')/merge`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).post({ across });
       trackSuccess('merge_range', Date.now() - startTime, { fileId, sheetIdOrName, address }, rUserId, rSessionId);
       return res;
@@ -582,7 +582,7 @@ async function unmergeRange(fileId, sheetIdOrName, address, req, userId, session
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${address}')/unmerge`;
+      const path = `${WB_PREFIX(fileId)}/worksheets('${enc(sheetIdOrName)}')/range(address='${enc(address)}')/unmerge`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).post({});
       trackSuccess('unmerge_range', Date.now() - startTime, { fileId, sheetIdOrName, address }, rUserId, rSessionId);
       return res;
@@ -898,7 +898,7 @@ async function filterTable(fileId, tableIdOrName, columnId, criteria, req, userI
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/tables('${enc(tableIdOrName)}')/columns(id='${columnId}')/filter/apply`;
+      const path = `${WB_PREFIX(fileId)}/tables('${enc(tableIdOrName)}')/columns(id='${enc(columnId)}')/filter/apply`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).post({ criteria });
       trackSuccess('filter_table', Date.now() - startTime, { fileId, tableIdOrName, columnId }, rUserId, rSessionId);
       return res;
@@ -924,7 +924,7 @@ async function clearTableFilter(fileId, tableIdOrName, columnId, req, userId, se
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/tables('${enc(tableIdOrName)}')/columns(id='${columnId}')/filter/clear`;
+      const path = `${WB_PREFIX(fileId)}/tables('${enc(tableIdOrName)}')/columns(id='${enc(columnId)}')/filter/clear`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).post({});
       trackSuccess('clear_table_filter', Date.now() - startTime, { fileId, tableIdOrName, columnId }, rUserId, rSessionId);
       return res;
@@ -977,7 +977,7 @@ async function callWorkbookFunction(fileId, functionName, args, req, userId, ses
   try {
     return await withSession(fileId, req, userId, sessionId, async (wbSessionId) => {
       const client = await graphClientFactory.createClient(req, userId, sessionId);
-      const path = `${WB_PREFIX(fileId)}/functions/${functionName}`;
+      const path = `${WB_PREFIX(fileId)}/functions/${enc(functionName)}`;
       const res = await client.api(path, userId, sessionId).header('workbook-session-id', wbSessionId).post(args);
       trackSuccess('call_function', Date.now() - startTime, { fileId, functionName }, rUserId, rSessionId);
       return res;

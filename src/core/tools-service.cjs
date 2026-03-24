@@ -1871,9 +1871,8 @@ This endpoint uses Microsoft Graph's calendarView which properly expands recurri
                 toolDef.endpoint = '/api/v1/word/create';
                 toolDef.method = 'POST';
                 toolDef.parameters = {
-                    fileName: { type: 'string', description: 'Name for the document (e.g., "Report.docx")', required: true },
-                    content: { type: 'object', description: 'Document content: { sections: [{ type: "heading"|"paragraph"|"table"|"list"|"image", ... }] }', required: true },
-                    folderId: { type: 'string', description: 'Parent folder drive item ID (omit for root)', optional: true }
+                    fileName: { type: 'string', description: 'Name for the document (e.g., "Report.docx"). Uploaded to OneDrive root.', required: true },
+                    content: { type: 'object', description: 'Document content: { sections: [{ type: "heading"|"paragraph"|"table"|"list"|"image", ... }] }', required: true }
                 };
                 break;
             case 'readWordDocument':
@@ -1915,9 +1914,8 @@ This endpoint uses Microsoft Graph's calendarView which properly expands recurri
                 toolDef.endpoint = '/api/v1/powerpoint/create';
                 toolDef.method = 'POST';
                 toolDef.parameters = {
-                    fileName: { type: 'string', description: 'Name for the presentation (e.g., "Deck.pptx")', required: true },
-                    slides: { type: 'array', description: 'Array of slides: [{ layout: "title"|"content"|"blank", title?, subtitle?, body?: [{type:"text"|"image",...}] }]', required: true },
-                    folderId: { type: 'string', description: 'Parent folder drive item ID (omit for root)', optional: true }
+                    fileName: { type: 'string', description: 'Name for the presentation (e.g., "Deck.pptx"). Uploaded to OneDrive root.', required: true },
+                    slides: { type: 'array', description: 'Array of slides: [{ layout: "title"|"content"|"blank", title?, subtitle?, body?: [{type:"text"|"image",...}] }]', required: true }
                 };
                 break;
             case 'readPresentation':
