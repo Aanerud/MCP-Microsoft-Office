@@ -13,6 +13,9 @@ const TeamsModule = require('../modules/teams/index.cjs');
 const TodoModule = require('../modules/todo/index.cjs');
 const ContactsModule = require('../modules/contacts/index.cjs');
 const GroupsModule = require('../modules/groups/index.cjs');
+const ExcelModule = require('../modules/excel/index.cjs');
+const WordModule = require('../modules/word/index.cjs');
+const PowerPointModule = require('../modules/powerpoint/index.cjs');
 const cacheService = require('../core/cache-service.cjs');
 const eventService = require('../core/event-service.cjs');
 const graphClientFactory = require('../graph/graph-client.cjs');
@@ -25,6 +28,9 @@ const teamsService = require('../graph/teams-service.cjs');
 const todoService = require('../graph/todo-service.cjs');
 const contactsService = require('../graph/contacts-service.cjs');
 const groupsService = require('../graph/groups-service.cjs');
+const excelService = require('../graph/excel-service.cjs');
+const wordService = require('../graph/word-service.cjs');
+const powerpointService = require('../graph/powerpoint-service.cjs');
 
 // Import error and monitoring services
 const ErrorService = require('../core/error-service.cjs');
@@ -40,6 +46,9 @@ const teamsModule = TeamsModule.init({ teamsService, cacheService, eventService,
 const todoModule = TodoModule.init({ todoService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
 const contactsModule = ContactsModule.init({ contactsService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
 const groupsModule = GroupsModule.init({ groupsService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
+const excelModule = ExcelModule.init({ excelService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
+const wordModule = WordModule.init({ wordService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
+const powerpointModule = PowerPointModule.init({ powerpointService, cacheService, eventService, errorService: ErrorService, monitoringService: MonitoringService });
 
 // Register modules
 moduleRegistry.registerModule(mailModule);
@@ -51,6 +60,9 @@ moduleRegistry.registerModule(teamsModule);
 moduleRegistry.registerModule(todoModule);
 moduleRegistry.registerModule(contactsModule);
 moduleRegistry.registerModule(groupsModule);
+moduleRegistry.registerModule(excelModule);
+moduleRegistry.registerModule(wordModule);
+moduleRegistry.registerModule(powerpointModule);
 
 // Simple mock NLU agent for development/testing
 const nluAgent = {
@@ -348,6 +360,14 @@ module.exports = {
   todoModule,
   contactsModule,
   groupsModule,
+  excelModule,
+  wordModule,
+  powerpointModule,
+  modules: {
+    excel: excelModule,
+    word: wordModule,
+    powerpoint: powerpointModule
+  },
   moduleRegistry,
   cacheService,
   eventService,
@@ -361,6 +381,9 @@ module.exports = {
   todoService,
   contactsService,
   groupsService,
+  excelService,
+  wordService,
+  powerpointService,
   toolsService,
   nluAgent,
   contextService,

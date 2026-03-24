@@ -1569,6 +1569,382 @@ This endpoint uses Microsoft Graph's calendarView which properly expands recurri
                 };
                 break;
 
+            // ========== Excel Workbook Tools ==========
+            case 'createWorkbookSession':
+                toolDef.description = 'Create a workbook session for an Excel file. Sessions enable efficient batch operations. Only .xlsx files are supported.';
+                toolDef.endpoint = '/api/v1/excel/session';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'OneDrive/SharePoint drive item ID of the .xlsx file', required: true },
+                    persistent: { type: 'boolean', description: 'Whether changes should be saved (true) or temporary (false)', optional: true, default: true }
+                };
+                break;
+            case 'closeWorkbookSession':
+                toolDef.description = 'Close an active workbook session for an Excel file.';
+                toolDef.endpoint = '/api/v1/excel/session';
+                toolDef.method = 'DELETE';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'OneDrive/SharePoint drive item ID of the .xlsx file', required: true }
+                };
+                break;
+            case 'listWorksheets':
+                toolDef.description = 'List all worksheets in an Excel workbook.';
+                toolDef.endpoint = '/api/v1/excel/worksheets';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'OneDrive/SharePoint drive item ID of the .xlsx file', required: true }
+                };
+                break;
+            case 'addWorksheet':
+                toolDef.description = 'Add a new worksheet to an Excel workbook.';
+                toolDef.endpoint = '/api/v1/excel/worksheets';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'OneDrive/SharePoint drive item ID of the .xlsx file', required: true },
+                    name: { type: 'string', description: 'Name for the new worksheet', required: true }
+                };
+                break;
+            case 'getWorksheet':
+                toolDef.description = 'Get a specific worksheet by name or ID.';
+                toolDef.endpoint = '/api/v1/excel/worksheets/detail';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true }
+                };
+                break;
+            case 'updateWorksheet':
+                toolDef.description = 'Update worksheet properties (name, position, visibility).';
+                toolDef.endpoint = '/api/v1/excel/worksheets/update';
+                toolDef.method = 'PATCH';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    properties: { type: 'object', description: 'Properties to update: { name?, position?, visibility? }', required: true }
+                };
+                break;
+            case 'deleteWorksheet':
+                toolDef.description = 'Delete a worksheet from an Excel workbook.';
+                toolDef.endpoint = '/api/v1/excel/worksheets/delete';
+                toolDef.method = 'DELETE';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID to delete', required: true }
+                };
+                break;
+            case 'getRange':
+                toolDef.description = 'Get cell values, formulas, and formatting from a range in an Excel worksheet. Max recommended: 10,000 cells per request.';
+                toolDef.endpoint = '/api/v1/excel/range';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Cell range in Excel notation (e.g., A1:C4, Sheet1!B2:D10)', required: true }
+                };
+                break;
+            case 'updateRange':
+                toolDef.description = 'Write values to a range in an Excel worksheet. Values should be a 2D array matching the range dimensions.';
+                toolDef.endpoint = '/api/v1/excel/range';
+                toolDef.method = 'PATCH';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Cell range in Excel notation (e.g., A1:C4)', required: true },
+                    values: { type: 'array', description: '2D array of values matching the range dimensions, e.g., [["Name","Age"],["Alice",30]]', required: true }
+                };
+                break;
+            case 'getRangeFormat':
+                toolDef.description = 'Get formatting properties of a range (font, fill, borders, alignment).';
+                toolDef.endpoint = '/api/v1/excel/range/format';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Cell range in Excel notation', required: true }
+                };
+                break;
+            case 'updateRangeFormat':
+                toolDef.description = 'Update formatting of a range (font, fill, borders, number format).';
+                toolDef.endpoint = '/api/v1/excel/range/format';
+                toolDef.method = 'PATCH';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Cell range in Excel notation', required: true },
+                    format: { type: 'object', description: 'Format properties: { font?, fill?, borders?, horizontalAlignment?, numberFormat? }', required: true }
+                };
+                break;
+            case 'sortRange':
+                toolDef.description = 'Sort a range of cells in an Excel worksheet.';
+                toolDef.endpoint = '/api/v1/excel/range/sort';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Cell range to sort', required: true },
+                    fields: { type: 'array', description: 'Sort fields: [{ key: columnIndex, ascending: true/false }]', required: true }
+                };
+                break;
+            case 'mergeRange':
+                toolDef.description = 'Merge cells in a range.';
+                toolDef.endpoint = '/api/v1/excel/range/merge';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Cell range to merge', required: true },
+                    across: { type: 'boolean', description: 'Merge cells in each row separately', optional: true, default: false }
+                };
+                break;
+            case 'unmergeRange':
+                toolDef.description = 'Unmerge previously merged cells in a range.';
+                toolDef.endpoint = '/api/v1/excel/range/unmerge';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Cell range to unmerge', required: true }
+                };
+                break;
+            case 'listTables':
+                toolDef.description = 'List all tables in an Excel worksheet.';
+                toolDef.endpoint = '/api/v1/excel/tables';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true }
+                };
+                break;
+            case 'createTable':
+                toolDef.description = 'Create a new table from a range in an Excel worksheet.';
+                toolDef.endpoint = '/api/v1/excel/tables';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Range address for the table (e.g., A1:D5)', required: true },
+                    hasHeaders: { type: 'boolean', description: 'Whether the first row contains headers', required: true }
+                };
+                break;
+            case 'updateTable':
+                toolDef.description = 'Update table properties (name, style, showHeaders, showTotals).';
+                toolDef.endpoint = '/api/v1/excel/tables/update';
+                toolDef.method = 'PATCH';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true },
+                    properties: { type: 'object', description: 'Properties: { name?, style?, showHeaders?, showTotals? }', required: true }
+                };
+                break;
+            case 'deleteTable':
+                toolDef.description = 'Delete a table from an Excel workbook. The data remains but table formatting is removed.';
+                toolDef.endpoint = '/api/v1/excel/tables/delete';
+                toolDef.method = 'DELETE';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID to delete', required: true }
+                };
+                break;
+            case 'listTableRows':
+                toolDef.description = 'List all rows in an Excel table.';
+                toolDef.endpoint = '/api/v1/excel/tables/rows';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true }
+                };
+                break;
+            case 'addTableRow':
+                toolDef.description = 'Add a row to an Excel table.';
+                toolDef.endpoint = '/api/v1/excel/tables/rows';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true },
+                    values: { type: 'array', description: 'Row values as array (e.g., ["Alice", 30, "Engineer"])', required: true },
+                    index: { type: 'number', description: 'Position to insert the row (null for end)', optional: true }
+                };
+                break;
+            case 'deleteTableRow':
+                toolDef.description = 'Delete a row from an Excel table by its index.';
+                toolDef.endpoint = '/api/v1/excel/tables/rows/delete';
+                toolDef.method = 'DELETE';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true },
+                    index: { type: 'number', description: 'Zero-based row index to delete', required: true }
+                };
+                break;
+            case 'listTableColumns':
+                toolDef.description = 'List all columns in an Excel table.';
+                toolDef.endpoint = '/api/v1/excel/tables/columns';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true }
+                };
+                break;
+            case 'addTableColumn':
+                toolDef.description = 'Add a column to an Excel table.';
+                toolDef.endpoint = '/api/v1/excel/tables/columns';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true },
+                    values: { type: 'array', description: 'Column values including header (e.g., [["Status"],["Open"],["Closed"]])', required: true },
+                    index: { type: 'number', description: 'Column position index', optional: true }
+                };
+                break;
+            case 'deleteTableColumn':
+                toolDef.description = 'Delete a column from an Excel table.';
+                toolDef.endpoint = '/api/v1/excel/tables/columns/delete';
+                toolDef.method = 'DELETE';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true },
+                    columnIdOrName: { type: 'string', description: 'Column name or ID to delete', required: true }
+                };
+                break;
+            case 'sortTable':
+                toolDef.description = 'Sort an Excel table by one or more columns.';
+                toolDef.endpoint = '/api/v1/excel/tables/sort';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true },
+                    fields: { type: 'array', description: 'Sort fields: [{ key: columnIndex, ascending: true/false }]', required: true }
+                };
+                break;
+            case 'filterTable':
+                toolDef.description = 'Apply a filter to a table column.';
+                toolDef.endpoint = '/api/v1/excel/tables/filter';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true },
+                    columnId: { type: 'string', description: 'Column ID to filter', required: true },
+                    criteria: { type: 'object', description: 'Filter criteria: { filterOn, criterion1, operator?, criterion2? }', required: true }
+                };
+                break;
+            case 'clearTableFilter':
+                toolDef.description = 'Clear the filter on a table column.';
+                toolDef.endpoint = '/api/v1/excel/tables/filter/clear';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', required: true },
+                    columnId: { type: 'string', description: 'Column ID to clear filter from', required: true }
+                };
+                break;
+            case 'convertTableToRange':
+                toolDef.description = 'Convert an Excel table to a regular range. Removes table formatting but keeps data.';
+                toolDef.endpoint = '/api/v1/excel/tables/convert';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID to convert', required: true }
+                };
+                break;
+            case 'callWorkbookFunction':
+                toolDef.description = 'Call any Excel workbook function (SUM, VLOOKUP, PMT, MEDIAN, etc.). Supports 300+ functions. Range arguments use { address: "Sheet1!A1:B5" } format.';
+                toolDef.endpoint = '/api/v1/excel/functions';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    functionName: { type: 'string', description: 'Excel function name (e.g., sum, vlookup, pmt, median)', required: true },
+                    args: { type: 'object', description: 'Function arguments as key-value pairs. For ranges use { address: "Sheet1!A1:B5" }', required: true }
+                };
+                break;
+            case 'calculateWorkbook':
+                toolDef.description = 'Recalculate all formulas in the workbook.';
+                toolDef.endpoint = '/api/v1/excel/calculate';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    calculationType: { type: 'string', description: 'Calculation type', optional: true, enum: ['Recalculate', 'Full', 'FullRebuild'], default: 'Full' }
+                };
+                break;
+
+            // ========== Word Document Tools ==========
+            case 'createWordDocument':
+                toolDef.description = 'Create a new Word document (.docx) from structured content. Supports headings, paragraphs, tables, lists, and images.';
+                toolDef.endpoint = '/api/v1/word/create';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileName: { type: 'string', description: 'Name for the document (e.g., "Report.docx")', required: true },
+                    content: { type: 'object', description: 'Document content: { sections: [{ type: "heading"|"paragraph"|"table"|"list"|"image", ... }] }', required: true },
+                    folderId: { type: 'string', description: 'Parent folder drive item ID (omit for root)', optional: true }
+                };
+                break;
+            case 'readWordDocument':
+                toolDef.description = 'Read a Word document and return its content as structured HTML and plain text. Max file size: 25MB.';
+                toolDef.endpoint = '/api/v1/word/read';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .docx file', required: true }
+                };
+                break;
+            case 'convertDocumentToPdf':
+                toolDef.description = 'Convert a Word document to PDF using Microsoft Graph. Returns the PDF content.';
+                toolDef.endpoint = '/api/v1/word/pdf';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .docx file', required: true }
+                };
+                break;
+            case 'getWordDocumentMetadata':
+                toolDef.description = 'Get metadata from a Word document (title, author, created date, modified date, keywords).';
+                toolDef.endpoint = '/api/v1/word/metadata';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .docx file', required: true }
+                };
+                break;
+            case 'getWordDocumentAsHtml':
+                toolDef.description = 'Convert a Word document to HTML for preview or display. Max file size: 25MB.';
+                toolDef.endpoint = '/api/v1/word/html';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .docx file', required: true }
+                };
+                break;
+
+            // ========== PowerPoint Tools ==========
+            case 'createPresentation':
+                toolDef.description = 'Create a new PowerPoint presentation (.pptx) from structured slide data. Supports title slides, content slides with text and images.';
+                toolDef.endpoint = '/api/v1/powerpoint/create';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    fileName: { type: 'string', description: 'Name for the presentation (e.g., "Deck.pptx")', required: true },
+                    slides: { type: 'array', description: 'Array of slides: [{ layout: "title"|"content"|"blank", title?, subtitle?, body?: [{type:"text"|"image",...}] }]', required: true },
+                    folderId: { type: 'string', description: 'Parent folder drive item ID (omit for root)', optional: true }
+                };
+                break;
+            case 'readPresentation':
+                toolDef.description = 'Read a PowerPoint presentation and return structured slide content (text elements per slide). Max file size: 25MB.';
+                toolDef.endpoint = '/api/v1/powerpoint/read';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .pptx file', required: true }
+                };
+                break;
+            case 'convertPresentationToPdf':
+                toolDef.description = 'Convert a PowerPoint presentation to PDF using Microsoft Graph.';
+                toolDef.endpoint = '/api/v1/powerpoint/pdf';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .pptx file', required: true }
+                };
+                break;
+            case 'getPresentationMetadata':
+                toolDef.description = 'Get metadata from a PowerPoint presentation (title, author, slide count, created/modified dates).';
+                toolDef.endpoint = '/api/v1/powerpoint/metadata';
+                toolDef.method = 'GET';
+                toolDef.parameters = {
+                    fileId: { type: 'string', description: 'Drive item ID of the .pptx file', required: true }
+                };
+                break;
+
             // Default for unknown capabilities
             default:
                 MonitoringService.warn(`No specific definition found for capability '${capability}' in module '${moduleName}'. Using defaults.`, {

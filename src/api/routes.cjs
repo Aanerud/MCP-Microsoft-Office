@@ -14,6 +14,9 @@ const teamsControllerFactory = require('./controllers/teams-controller.cjs');
 const todoControllerFactory = require('./controllers/todo-controller.cjs');
 const contactsControllerFactory = require('./controllers/contacts-controller.cjs');
 const groupsControllerFactory = require('./controllers/groups-controller.cjs');
+const excelControllerFactory = require('./controllers/excel-controller.cjs');
+const wordControllerFactory = require('./controllers/word-controller.cjs');
+const powerpointControllerFactory = require('./controllers/powerpoint-controller.cjs');
 const logController = require('./controllers/log-controller.cjs');
 const authController = require('./controllers/auth-controller.cjs');
 const deviceAuthController = require('./controllers/device-auth-controller.cjs');
@@ -323,6 +326,9 @@ function registerRoutes(router) {
         contextService: apiContext.contextService,
         errorService: apiContext.errorService
     });
+    const excelController = excelControllerFactory({ excelModule: apiContext.modules.excel });
+    const wordController = wordControllerFactory({ wordModule: apiContext.modules.word });
+    const powerpointController = powerpointControllerFactory({ powerpointModule: apiContext.modules.powerpoint });
 
     // --- Permissions Endpoint ---
     // Returns available scopes and tool capabilities based on user's Microsoft Graph token
@@ -576,6 +582,60 @@ function registerRoutes(router) {
     groupsRouter.get('/:groupId', groupsController.getGroup); // /v1/groups/:groupId
     groupsRouter.get('/:groupId/members', groupsController.listGroupMembers); // /v1/groups/:groupId/members
     v1.use('/groups', groupsRouter);
+
+    // --- Excel Router ---
+    const excelRouter = express.Router();
+    excelRouter.use(controllerLogger());
+    excelRouter.post('/session', placeholderRateLimit, excelController.createSession);
+    excelRouter.delete('/session', excelController.closeSession);
+    excelRouter.get('/worksheets', excelController.listWorksheets);
+    excelRouter.post('/worksheets', placeholderRateLimit, excelController.addWorksheet);
+    excelRouter.get('/worksheets/detail', excelController.getWorksheet);
+    excelRouter.patch('/worksheets/update', excelController.updateWorksheet);
+    excelRouter.delete('/worksheets/delete', excelController.deleteWorksheet);
+    excelRouter.get('/range', excelController.getRange);
+    excelRouter.patch('/range', excelController.updateRange);
+    excelRouter.get('/range/format', excelController.getRangeFormat);
+    excelRouter.patch('/range/format', excelController.updateRangeFormat);
+    excelRouter.post('/range/sort', placeholderRateLimit, excelController.sortRange);
+    excelRouter.post('/range/merge', placeholderRateLimit, excelController.mergeRange);
+    excelRouter.post('/range/unmerge', placeholderRateLimit, excelController.unmergeRange);
+    excelRouter.get('/tables', excelController.listTables);
+    excelRouter.post('/tables', placeholderRateLimit, excelController.createTable);
+    excelRouter.patch('/tables/update', excelController.updateTable);
+    excelRouter.delete('/tables/delete', excelController.deleteTable);
+    excelRouter.get('/tables/rows', excelController.listTableRows);
+    excelRouter.post('/tables/rows', placeholderRateLimit, excelController.addTableRow);
+    excelRouter.delete('/tables/rows/delete', excelController.deleteTableRow);
+    excelRouter.get('/tables/columns', excelController.listTableColumns);
+    excelRouter.post('/tables/columns', placeholderRateLimit, excelController.addTableColumn);
+    excelRouter.delete('/tables/columns/delete', excelController.deleteTableColumn);
+    excelRouter.post('/tables/sort', placeholderRateLimit, excelController.sortTable);
+    excelRouter.post('/tables/filter', placeholderRateLimit, excelController.filterTable);
+    excelRouter.post('/tables/filter/clear', placeholderRateLimit, excelController.clearTableFilter);
+    excelRouter.post('/tables/convert', placeholderRateLimit, excelController.convertTableToRange);
+    excelRouter.post('/functions', placeholderRateLimit, excelController.callWorkbookFunction);
+    excelRouter.post('/calculate', placeholderRateLimit, excelController.calculateWorkbook);
+    v1.use('/excel', excelRouter);
+
+    // --- Word Router ---
+    const wordRouter = express.Router();
+    wordRouter.use(controllerLogger());
+    wordRouter.post('/create', placeholderRateLimit, wordController.createDocument);
+    wordRouter.get('/read', wordController.readDocument);
+    wordRouter.get('/pdf', wordController.convertToPdf);
+    wordRouter.get('/metadata', wordController.getMetadata);
+    wordRouter.get('/html', wordController.getAsHtml);
+    v1.use('/word', wordRouter);
+
+    // --- PowerPoint Router ---
+    const pptRouter = express.Router();
+    pptRouter.use(controllerLogger());
+    pptRouter.post('/create', placeholderRateLimit, powerpointController.createPresentation);
+    pptRouter.get('/read', powerpointController.readPresentation);
+    pptRouter.get('/pdf', powerpointController.convertToPdf);
+    pptRouter.get('/metadata', powerpointController.getMetadata);
+    v1.use('/powerpoint', pptRouter);
 
     // --- Log Router --- (No Auth required for logs)
     const logRouter = express.Router();
