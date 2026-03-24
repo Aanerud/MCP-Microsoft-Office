@@ -14,7 +14,7 @@ Test tenants sit empty. Static test data does not exercise real workflows. When 
 
 This project connects any MCP-compatible AI client to Microsoft 365 through the Graph API. Each agent authenticates as a distinct tenant user and performs real operations against real data.
 
-- **78 tools** across 9 modules: Mail, Calendar, Files, Teams, Contacts, To-Do, Groups, People, Search
+- **117 tools** across 12 modules: Mail, Calendar, Files, **Excel**, **Word**, **PowerPoint**, Teams, Contacts, To-Do, Groups, People, Search
 - **Multi-user**: one server supports your entire team, each with isolated data
 - **Real Graph API calls**: every operation hits the actual tenant, not a mock
 - **Secure**: tokens encrypted at rest, no credentials stored on third-party servers
@@ -66,7 +66,7 @@ The server requires 18 Microsoft Graph delegated permissions. Twelve work withou
 | `Mail.ReadWrite` | readMail, readMailDetails, markEmailRead, flagMail, getMailAttachments, addMailAttachment, removeMailAttachment |
 | `Mail.Send` | sendMail, replyToMail |
 | `Calendars.ReadWrite` | getEvents, createEvent, updateEvent, cancelEvent, acceptEvent, tentativelyAcceptEvent, declineEvent, getAvailability, findMeetingTimes, getRooms, getCalendars, addAttachment, removeAttachment |
-| `Files.ReadWrite.All` | listFiles, uploadFile, downloadFile, getFileMetadata, getFileContent, setFileContent, updateFileContent, createSharingLink, getSharingLinks, removeSharingPermission, listChannelFiles, uploadFileToChannel, readChannelFile |
+| `Files.ReadWrite.All` | listFiles, uploadFile, downloadFile, getFileMetadata, getFileContent, setFileContent, updateFileContent, createSharingLink, getSharingLinks, removeSharingPermission, listChannelFiles, uploadFileToChannel, readChannelFile, **all Excel workbook tools**, **all Word/PowerPoint tools** |
 | `Contacts.ReadWrite` | listContacts, getContact, createContact, updateContact, deleteContact, searchContacts |
 | `Tasks.ReadWrite` | listTaskLists, getTaskList, createTaskList, updateTaskList, deleteTaskList, listTasks, getTask, createTask, updateTask, deleteTask, completeTask |
 | `Chat.ReadWrite` | listChats, createChat, getChatMessages, sendChatMessage |
@@ -86,7 +86,7 @@ The server requires 18 Microsoft Graph delegated permissions. Twelve work withou
 | `ChannelMessage.Read.All` | Read channel message history |
 | `OnlineMeetingTranscript.Read.All` | getMeetingTranscripts, getMeetingTranscriptContent |
 
-**Without admin consent**, you get Mail, Calendar, Files, Contacts, To-Do, Chat, and basic Teams channel operations. **With admin consent**, you add People directory search, Groups, channel member management, and meeting transcripts.
+**Without admin consent**, you get Mail, Calendar, Files, Excel workbooks, Word documents, PowerPoint presentations, Contacts, To-Do, Chat, and basic Teams channel operations. **With admin consent**, you add People directory search, Groups, channel member management, and meeting transcripts.
 
 ---
 
@@ -159,7 +159,7 @@ Restart Claude Desktop. Ask: *"What's on my calendar today?"*
 
 ---
 
-## Tools (78)
+## Tools (117)
 
 ### Mail (9)
 
@@ -207,6 +207,66 @@ Restart Claude Desktop. Ask: *"What's on my calendar today?"*
 | `createSharingLink` | Create a sharing link |
 | `getSharingLinks` | List sharing links |
 | `removeSharingPermission` | Remove sharing access |
+
+### Excel (30)
+
+Work directly with Excel workbooks stored in OneDrive or SharePoint — no file download needed. All operations go through Microsoft Graph's workbook API with transparent session management.
+
+| Tool | Description |
+|---|---|
+| `createWorkbookSession` | Open a workbook session (persistent or temporary) |
+| `closeWorkbookSession` | Close an active workbook session |
+| `listWorksheets` | List all worksheets in a workbook |
+| `addWorksheet` | Add a new worksheet |
+| `getWorksheet` | Get a worksheet by name or ID |
+| `updateWorksheet` | Rename, reposition, or hide a worksheet |
+| `deleteWorksheet` | Delete a worksheet |
+| `getRange` | Read cell values, formulas, and formatting |
+| `updateRange` | Write values to a cell range |
+| `getRangeFormat` | Get formatting (font, fill, borders) |
+| `updateRangeFormat` | Set formatting (bold, colors, number formats) |
+| `sortRange` | Sort cells in a range |
+| `mergeRange` | Merge cells |
+| `unmergeRange` | Unmerge cells |
+| `listTables` | List all tables in a worksheet |
+| `createTable` | Create a table from a range |
+| `updateTable` | Rename or restyle a table |
+| `deleteTable` | Delete a table |
+| `listTableRows` | List all rows in a table |
+| `addTableRow` | Add a row to a table |
+| `deleteTableRow` | Delete a row by index |
+| `listTableColumns` | List all columns in a table |
+| `addTableColumn` | Add a column to a table |
+| `deleteTableColumn` | Delete a column |
+| `sortTable` | Sort a table by column |
+| `filterTable` | Apply a filter to a table column |
+| `clearTableFilter` | Clear a column filter |
+| `convertTableToRange` | Convert a table back to a plain range |
+| `callWorkbookFunction` | Call any of 300+ Excel functions (SUM, VLOOKUP, PMT, etc.) |
+| `calculateWorkbook` | Recalculate all formulas |
+
+### Word (5)
+
+Create, read, and convert Word documents. Documents are created from structured JSON and stored in OneDrive. Reading uses mammoth for HTML/text extraction.
+
+| Tool | Description |
+|---|---|
+| `createWordDocument` | Create a .docx from structured content (headings, paragraphs, tables, lists, images) |
+| `readWordDocument` | Read a document as HTML and plain text |
+| `getWordDocumentMetadata` | Get title, author, dates, keywords |
+| `getWordDocumentAsHtml` | Convert document content to HTML |
+| `convertDocumentToPdf` | Convert a Word document to PDF |
+
+### PowerPoint (4)
+
+Create, read, and convert PowerPoint presentations. Presentations are built from structured slide data and stored in OneDrive.
+
+| Tool | Description |
+|---|---|
+| `createPresentation` | Create a .pptx with title, content, and blank slides |
+| `readPresentation` | Read slide content (text elements per slide) |
+| `getPresentationMetadata` | Get title, author, slide count, dates |
+| `convertPresentationToPdf` | Convert a presentation to PDF |
 
 ### Teams (21)
 
@@ -311,13 +371,13 @@ npm run dev:web
 node tests/run-all.cjs
 ```
 
-The test suite authenticates multiple users, then exercises all 78 tools across 9 modules plus 5 cross-module workflows. See `tests/` for the full implementation.
+The test suite authenticates multiple users, then exercises all 117 tools across 12 modules plus 5 cross-module workflows. See `tests/` for the full implementation.
 
 ---
 
 ## E2E Test Suite
 
-The project includes a comprehensive test suite covering all 78 tools.
+The project includes a comprehensive test suite covering all 117 tools.
 
 ```bash
 # Run all tests (requires server running)
@@ -335,7 +395,7 @@ node tests/run-all.cjs --workflows-only
 ```
 tests/
   lib/           Shared auth, HTTP client, reporter
-  buckets/       One file per module (9 files, 78 tools)
+  buckets/       One file per module (12 files, 117 tools)
   workflows/     Cross-module tests (5 files)
   run-all.cjs    Master runner
 ```
@@ -405,7 +465,7 @@ MCP-Microsoft-Office/
 │   ├── auth/                MSAL authentication
 │   ├── core/                Services (cache, storage, tools)
 │   ├── graph/               Microsoft Graph API services
-│   └── modules/             Feature modules (mail, calendar, etc.)
+│   └── modules/             Feature modules (mail, calendar, excel, word, powerpoint, etc.)
 ├── public/                  Web UI
 └── tests/                   E2E test suite (gitignored)
 ```

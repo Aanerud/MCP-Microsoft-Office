@@ -178,9 +178,10 @@ module.exports = ({ filesModule, errorService = ErrorService, monitoringService 
             // Validate input
             const schema = Joi.object({
                 name: Joi.string().min(1).max(255).pattern(/^[^\u003c\u003e:"/\\|?*]+$/).required(),
-                content: Joi.string().min(1).max(10485760).required() // 10MB limit
+                content: Joi.string().min(1).max(10485760).required(), // 10MB limit
+                contentEncoding: Joi.string().valid('base64').optional()
             });
-            
+
             const { error, value } = schema.validate(req.body);
             if (error) {
                 // Pattern 3: Infrastructure Error Logging
@@ -228,8 +229,13 @@ module.exports = ({ filesModule, errorService = ErrorService, monitoringService 
                 }, 'files');
             }
             
+            // Decode base64 content for binary files (xlsx, docx, pptx, etc.)
+            const fileContent = value.contentEncoding === 'base64'
+                ? Buffer.from(value.content, 'base64')
+                : value.content;
+
             // Call the module method directly with req as separate parameter
-            const result = await filesModule.uploadFile(value.name, value.content, req);
+            const result = await filesModule.uploadFile(value.name, fileContent, req);
             
             // Calculate execution time
             const executionTime = Date.now() - startTime;

@@ -26,7 +26,7 @@ node tests/run-all.cjs --workflows-only
 ```
 tests/
   lib/           Shared infrastructure (auth, http-client, reporter, harness)
-  buckets/       One test file per module (9 files covering 78 tools)
+  buckets/       One test file per module (12 files covering 117 tools)
   workflows/     Cross-module integration tests (5 files)
   run-all.cjs    Master test runner
   _archive/      Old test files (reference only)
@@ -59,3 +59,30 @@ Three test users are configured in `tests/lib/config.cjs`.
 - `GET /v1/mail/attachments` expects query param `id`, not `messageId`
 - `POST /v1/mail/flag` expects `{ id, flag: true }`
 - `POST /v1/mail/:id/reply` expects `{ body }`, not `{ comment }`
+
+### Excel / Word / PowerPoint Modules (v1)
+
+**Excel** (30 tools): Graph-native workbook API. Sessions managed transparently by server.
+- All tools require `fileId` (OneDrive drive item ID of a .xlsx file)
+- Range addresses use Excel notation: `A1:C4`, `Sheet1!B2:D10`
+- Values are 2D arrays: `[["Name","Age"],["Alice",30]]`
+- `callWorkbookFunction` accepts any of 300+ Excel functions
+- Session cache: in-memory Map per (user, fileId), 4-min TTL
+
+**Word** (5 tools): Create via `docx` lib, read via `mammoth`, convert via Graph.
+- `POST /word/create` expects `{ fileName, content: { sections: [...] } }`
+- Section types: `heading`, `paragraph`, `table`, `list`, `image`
+- `GET /word/read` returns `{ html, text, warnings }`
+- Max file size for read operations: 25MB
+
+**PowerPoint** (4 tools): Create via `pptxgenjs`, read via jszip, convert via Graph.
+- `POST /powerpoint/create` expects `{ fileName, slides: [...] }`
+- Slide layouts: `title`, `content`, `blank`
+- `GET /powerpoint/read` returns `{ slideCount, slides: [{ index, texts }] }`
+
+**Test the new modules:**
+```bash
+node tests/run-all.cjs --bucket excel --buckets-only
+node tests/run-all.cjs --bucket word --buckets-only
+node tests/run-all.cjs --bucket powerpoint --buckets-only
+```

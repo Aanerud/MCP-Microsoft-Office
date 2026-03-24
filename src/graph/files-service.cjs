@@ -1726,6 +1726,63 @@ async function updateFileContent(id, content, req, options = {}, userId, session
   }
 }
 
+/**
+ * Resolves a file by OneDrive path (e.g., 'Documents/report.xlsx')
+ * @param {string} filePath - OneDrive-rooted path
+ * @param {object} req - Express request object
+ * @param {string} [userId] - User ID for context
+ * @param {string} [sessionId] - Session ID for context
+ * @returns {Promise<object>} Graph driveItem object
+ */
+async function getFileByPath(filePath, req, userId = null, sessionId = null) {
+  const startTime = Date.now();
+  const resolvedUserId = userId || req?.user?.userId;
+  const resolvedSessionId = sessionId || req?.session?.id;
+
+  try {
+    const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
+    const result = await client.api(`/me/drive/root:/${filePath}`, resolvedUserId, resolvedSessionId).get();
+
+    const executionTime = Date.now() - startTime;
+    MonitoringService.trackMetric('file_get_by_path', executionTime, {
+      path: filePath.substring(0, 50),
+      userId: resolvedUserId,
+      timestamp: new Date().toISOString()
+    });
+
+    return result;
+  } catch (error) {
+    const executionTime = Date.now() - startTime;
+    const mcpError = error.id ? error : ErrorService.createError(
+      'files',
+      `Failed to resolve file by path: ${error.message}`,
+      'error',
+      { path: filePath, error: error.message, stack: error.stack, timestamp: new Date().toISOString() }
+    );
+    MonitoringService.logError(mcpError);
+    MonitoringService.trackMetric('file_get_by_path_failure', executionTime, {
+      path: filePath.substring(0, 50),
+      errorCode: error.statusCode || error.code || 'unknown',
+      userId: resolvedUserId,
+      timestamp: new Date().toISOString()
+    });
+    throw mcpError;
+  }
+}
+
+/**
+ * Gets file size without downloading the file content
+ * @param {string} fileId - Drive item ID
+ * @param {object} req - Express request object
+ * @param {string} [userId] - User ID for context
+ * @param {string} [sessionId] - Session ID for context
+ * @returns {Promise<number>} File size in bytes
+ */
+async function getFileSize(fileId, req, userId = null, sessionId = null) {
+  const metadata = await getFileMetadata(fileId, req, userId, sessionId);
+  return metadata.size || 0;
+}
+
 // Export all file service methods
 module.exports = {
   listFiles,              // List files and folders in a directory
@@ -1737,5 +1794,7 @@ module.exports = {
   updateFileContent,      // Handles both update and set operations with options.setContent
   createSharingLink,      // Create sharing links for files
   getSharingLinks,        // Get sharing links for files
-  removeSharingPermission // Remove sharing permissions from files
+  removeSharingPermission, // Remove sharing permissions from files
+  getFileByPath,          // Resolve file by OneDrive path
+  getFileSize             // Get file size without downloading
 };
