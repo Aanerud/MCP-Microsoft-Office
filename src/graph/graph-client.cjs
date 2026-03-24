@@ -261,6 +261,8 @@ class GraphClient {
         const self = this;
         let apiVersion = 'v1.0'; // Default version
 
+        let extraHeaders = {};
+
         const requestBuilder = {
             /**
              * Set the API version (e.g., 'v1.0' or 'beta')
@@ -271,19 +273,34 @@ class GraphClient {
                 apiVersion = ver;
                 return requestBuilder;
             },
+            /**
+             * Add a custom header to the request
+             * @param {string} name - Header name
+             * @param {string} value - Header value
+             * @returns {object} - Returns this for chaining
+             */
+            header(name, value) {
+                extraHeaders[name] = value;
+                return requestBuilder;
+            },
             async get(options = {}) {
+                options.headers = Object.assign({}, extraHeaders, options.headers || {});
                 return await _fetchWithRetry(path, self.token, 'GET', null, options, 2, userId, sessionId, apiVersion);
             },
             async post(body, options = {}) {
+                options.headers = Object.assign({}, extraHeaders, options.headers || {});
                 return await _fetchWithRetry(path, self.token, 'POST', body, options, 2, userId, sessionId, apiVersion);
             },
             async put(body, options = {}) {
+                options.headers = Object.assign({}, extraHeaders, options.headers || {});
                 return await _fetchWithRetry(path, self.token, 'PUT', body, options, 2, userId, sessionId, apiVersion);
             },
             async patch(body, options = {}) {
+                options.headers = Object.assign({}, extraHeaders, options.headers || {});
                 return await _fetchWithRetry(path, self.token, 'PATCH', body, options, 2, userId, sessionId, apiVersion);
             },
             async delete(options = {}) {
+                options.headers = Object.assign({}, extraHeaders, options.headers || {});
                 return await _fetchWithRetry(path, self.token, 'DELETE', null, options, 2, userId, sessionId, apiVersion);
             }
         };
@@ -340,10 +357,22 @@ async function _fetchWithRetry(path, token, method, body, options, retries = 2, 
         const requestStartTime = Date.now();
         
         try {
+            // For Buffer bodies (file uploads), send raw binary with appropriate content-type
+            let requestBody;
+            if (body && Buffer.isBuffer(body)) {
+                requestBody = body;
+                if (!headers['Content-Type'] || headers['Content-Type'] === 'application/json') {
+                    headers['Content-Type'] = 'application/octet-stream';
+                }
+                headers['Content-Length'] = body.length.toString();
+            } else {
+                requestBody = body ? JSON.stringify(body) : undefined;
+            }
+
             const res = await fetch(url, {
                 method,
                 headers,
-                body: body ? JSON.stringify(body) : undefined
+                body: requestBody
             });
             
             const responseTime = Date.now() - requestStartTime;
@@ -560,8 +589,11 @@ async function _fetchWithRetry(path, token, method, body, options, retries = 2, 
             
             // For the last attempt, get detailed error information
             if (attempt === retries) {
+                // Read body as text first (can only read once), then parse
+                const rawErrorText = await res.text().catch(() => '');
+                let errorData;
                 try {
-                    const errorData = await res.json();
+                    errorData = rawErrorText ? JSON.parse(rawErrorText) : {};
                     
                     // Pattern 3: Infrastructure Error Logging
                     const mcpError = ErrorService.createError(
@@ -618,8 +650,8 @@ async function _fetchWithRetry(path, token, method, body, options, retries = 2, 
                     
                     throw mcpError;
                 } catch (parseError) {
-                    // If we can't parse the error response as JSON
-                    const errorText = await res.text().catch(() => 'Unable to read error response');
+                    // If we can't parse the error response as JSON, use the raw text we already captured
+                    const errorText = rawErrorText || 'Unable to read error response';
                     
                     // Pattern 3: Infrastructure Error Logging
                     const mcpError = ErrorService.createError(

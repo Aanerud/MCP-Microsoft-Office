@@ -1518,18 +1518,22 @@ async handleIntent(intent, entities = {}, context = {}) {
             
             case 'uploadFile': {
                 // Handle file upload requests
-                const { name, content, parentId } = entities;
-                
+                const { name, content, parentId, contentEncoding } = entities;
+
                 // Log upload request details
                 monitoringService?.debug('Handling uploadFile intent', {
                     fileName: name,
                     parentId: parentId || 'root',
                     contentSize: content?.length || 0,
+                    contentEncoding: contentEncoding || 'utf8',
                     timestamp: new Date().toISOString()
                 }, 'files');
-                
+
+                // Decode base64 content for binary files (xlsx, docx, pptx, etc.)
+                const fileContent = contentEncoding === 'base64' ? Buffer.from(content, 'base64') : content;
+
                 // Call the uploadFile method
-                const uploadResult = await this.uploadFile(name, content, context.req);
+                const uploadResult = await this.uploadFile(name, fileContent, context.req);
                 
                 // Return normalized file metadata
                 result = { type: 'fileUploadResult', file: normalizeFile(uploadResult) };
