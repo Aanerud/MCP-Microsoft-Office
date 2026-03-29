@@ -123,6 +123,9 @@ const stubModuleRegistry = {
         { id: 'todo', name: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
         { id: 'contacts', name: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
         { id: 'groups', name: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] },
+        { id: 'excel', name: 'Excel Workbook Operations', capabilities: ['createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet', 'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange', 'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow', 'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange', 'callWorkbookFunction', 'calculateWorkbook'] },
+        { id: 'word', name: 'Word Document Operations', capabilities: ['createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml'] },
+        { id: 'powerpoint', name: 'PowerPoint Presentation Operations', capabilities: ['createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata'] },
         { id: 'query', name: 'query', capabilities: ['query'] }
     ],
     getModule: (moduleName) => {
@@ -136,6 +139,9 @@ const stubModuleRegistry = {
             'todo': { id: 'todo', capabilities: ['listTaskLists', 'getTaskList', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'listTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'completeTask'] },
             'contacts': { id: 'contacts', capabilities: ['listContacts', 'getContact', 'createContact', 'updateContact', 'deleteContact', 'searchContacts'] },
             'groups': { id: 'groups', capabilities: ['listGroups', 'getGroup', 'listGroupMembers', 'listMyGroups'] },
+            'excel': { id: 'excel', capabilities: ['createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet', 'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange', 'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow', 'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange', 'callWorkbookFunction', 'calculateWorkbook'] },
+            'word': { id: 'word', capabilities: ['createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml'] },
+            'powerpoint': { id: 'powerpoint', capabilities: ['createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata'] },
             'query': { id: 'query', capabilities: ['query'] }
         };
         return modules[moduleName] || null;
@@ -2095,6 +2101,175 @@ async function executeModuleMethod(moduleName, methodName, params = {}) {
             case 'system.getPrompts':
                 // Return empty prompts list as this isn't implemented yet
                 return { prompts: [] };
+
+            // ========== Excel Workbook Tools ==========
+            case 'excel.createWorkbookSession':
+                apiPath = '/v1/excel/session';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, persistent: params.persistent };
+                break;
+            case 'excel.closeWorkbookSession':
+                apiPath = `/v1/excel/session?fileId=${encodeURIComponent(params.fileId)}`;
+                apiMethod = 'DELETE';
+                break;
+            case 'excel.listWorksheets':
+                apiPath = `/v1/excel/worksheets?fileId=${encodeURIComponent(params.fileId)}`;
+                break;
+            case 'excel.addWorksheet':
+                apiPath = '/v1/excel/worksheets';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, name: params.name };
+                break;
+            case 'excel.getWorksheet':
+                apiPath = `/v1/excel/worksheets/detail?fileId=${encodeURIComponent(params.fileId)}&sheetIdOrName=${encodeURIComponent(params.sheetIdOrName)}`;
+                break;
+            case 'excel.updateWorksheet':
+                apiPath = '/v1/excel/worksheets/update';
+                apiMethod = 'PATCH';
+                apiData = { fileId: params.fileId, sheetIdOrName: params.sheetIdOrName, properties: params.properties };
+                break;
+            case 'excel.deleteWorksheet':
+                apiPath = `/v1/excel/worksheets/delete?fileId=${encodeURIComponent(params.fileId)}&sheetIdOrName=${encodeURIComponent(params.sheetIdOrName)}`;
+                apiMethod = 'DELETE';
+                break;
+            case 'excel.getRange':
+                apiPath = `/v1/excel/range?fileId=${encodeURIComponent(params.fileId)}&sheetIdOrName=${encodeURIComponent(params.sheetIdOrName)}&address=${encodeURIComponent(params.address)}`;
+                break;
+            case 'excel.updateRange':
+                apiPath = '/v1/excel/range';
+                apiMethod = 'PATCH';
+                apiData = { fileId: params.fileId, sheetIdOrName: params.sheetIdOrName, address: params.address, values: params.values };
+                break;
+            case 'excel.getRangeFormat':
+                apiPath = `/v1/excel/range/format?fileId=${encodeURIComponent(params.fileId)}&sheetIdOrName=${encodeURIComponent(params.sheetIdOrName)}&address=${encodeURIComponent(params.address)}`;
+                break;
+            case 'excel.updateRangeFormat':
+                apiPath = '/v1/excel/range/format';
+                apiMethod = 'PATCH';
+                apiData = { fileId: params.fileId, sheetIdOrName: params.sheetIdOrName, address: params.address, format: params.format };
+                break;
+            case 'excel.sortRange':
+                apiPath = '/v1/excel/range/sort';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, sheetIdOrName: params.sheetIdOrName, address: params.address, fields: params.fields };
+                break;
+            case 'excel.mergeRange':
+                apiPath = '/v1/excel/range/merge';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, sheetIdOrName: params.sheetIdOrName, address: params.address, across: params.across };
+                break;
+            case 'excel.unmergeRange':
+                apiPath = '/v1/excel/range/unmerge';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, sheetIdOrName: params.sheetIdOrName, address: params.address };
+                break;
+            case 'excel.listTables':
+                apiPath = `/v1/excel/tables?fileId=${encodeURIComponent(params.fileId)}&sheetIdOrName=${encodeURIComponent(params.sheetIdOrName)}`;
+                break;
+            case 'excel.createTable':
+                apiPath = '/v1/excel/tables';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, sheetIdOrName: params.sheetIdOrName, address: params.address, hasHeaders: params.hasHeaders };
+                break;
+            case 'excel.updateTable':
+                apiPath = '/v1/excel/tables/update';
+                apiMethod = 'PATCH';
+                apiData = { fileId: params.fileId, tableIdOrName: params.tableIdOrName, properties: params.properties };
+                break;
+            case 'excel.deleteTable':
+                apiPath = `/v1/excel/tables/delete?fileId=${encodeURIComponent(params.fileId)}&tableIdOrName=${encodeURIComponent(params.tableIdOrName)}`;
+                apiMethod = 'DELETE';
+                break;
+            case 'excel.listTableRows':
+                apiPath = `/v1/excel/tables/rows?fileId=${encodeURIComponent(params.fileId)}&tableIdOrName=${encodeURIComponent(params.tableIdOrName)}`;
+                break;
+            case 'excel.addTableRow':
+                apiPath = '/v1/excel/tables/rows';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, tableIdOrName: params.tableIdOrName, values: params.values, index: params.index };
+                break;
+            case 'excel.deleteTableRow':
+                apiPath = `/v1/excel/tables/rows/delete?fileId=${encodeURIComponent(params.fileId)}&tableIdOrName=${encodeURIComponent(params.tableIdOrName)}&index=${params.index}`;
+                apiMethod = 'DELETE';
+                break;
+            case 'excel.listTableColumns':
+                apiPath = `/v1/excel/tables/columns?fileId=${encodeURIComponent(params.fileId)}&tableIdOrName=${encodeURIComponent(params.tableIdOrName)}`;
+                break;
+            case 'excel.addTableColumn':
+                apiPath = '/v1/excel/tables/columns';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, tableIdOrName: params.tableIdOrName, values: params.values, index: params.index };
+                break;
+            case 'excel.deleteTableColumn':
+                apiPath = `/v1/excel/tables/columns/delete?fileId=${encodeURIComponent(params.fileId)}&tableIdOrName=${encodeURIComponent(params.tableIdOrName)}&columnIdOrName=${encodeURIComponent(params.columnIdOrName)}`;
+                apiMethod = 'DELETE';
+                break;
+            case 'excel.sortTable':
+                apiPath = '/v1/excel/tables/sort';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, tableIdOrName: params.tableIdOrName, fields: params.fields };
+                break;
+            case 'excel.filterTable':
+                apiPath = '/v1/excel/tables/filter';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, tableIdOrName: params.tableIdOrName, columnId: params.columnId, criteria: params.criteria };
+                break;
+            case 'excel.clearTableFilter':
+                apiPath = '/v1/excel/tables/filter/clear';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, tableIdOrName: params.tableIdOrName, columnId: params.columnId };
+                break;
+            case 'excel.convertTableToRange':
+                apiPath = '/v1/excel/tables/convert';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, tableIdOrName: params.tableIdOrName };
+                break;
+            case 'excel.callWorkbookFunction':
+                apiPath = '/v1/excel/functions';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, functionName: params.functionName, args: params.args };
+                break;
+            case 'excel.calculateWorkbook':
+                apiPath = '/v1/excel/calculate';
+                apiMethod = 'POST';
+                apiData = { fileId: params.fileId, calculationType: params.calculationType };
+                break;
+
+            // ========== Word Document Tools ==========
+            case 'word.createWordDocument':
+                apiPath = '/v1/word/create';
+                apiMethod = 'POST';
+                apiData = { fileName: params.fileName, content: params.content };
+                break;
+            case 'word.readWordDocument':
+                apiPath = `/v1/word/read?fileId=${encodeURIComponent(params.fileId)}`;
+                break;
+            case 'word.convertDocumentToPdf':
+                apiPath = `/v1/word/pdf?fileId=${encodeURIComponent(params.fileId)}`;
+                break;
+            case 'word.getWordDocumentMetadata':
+                apiPath = `/v1/word/metadata?fileId=${encodeURIComponent(params.fileId)}`;
+                break;
+            case 'word.getWordDocumentAsHtml':
+                apiPath = `/v1/word/html?fileId=${encodeURIComponent(params.fileId)}`;
+                break;
+
+            // ========== PowerPoint Tools ==========
+            case 'powerpoint.createPresentation':
+                apiPath = '/v1/powerpoint/create';
+                apiMethod = 'POST';
+                apiData = { fileName: params.fileName, slides: params.slides };
+                break;
+            case 'powerpoint.readPresentation':
+                apiPath = `/v1/powerpoint/read?fileId=${encodeURIComponent(params.fileId)}`;
+                break;
+            case 'powerpoint.convertPresentationToPdf':
+                apiPath = `/v1/powerpoint/pdf?fileId=${encodeURIComponent(params.fileId)}`;
+                break;
+            case 'powerpoint.getPresentationMetadata':
+                apiPath = `/v1/powerpoint/metadata?fileId=${encodeURIComponent(params.fileId)}`;
+                break;
+
             default:
                 throw new Error(`Unknown API endpoint for ${moduleName}.${methodName}`);
         }
