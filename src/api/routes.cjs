@@ -383,7 +383,18 @@ function registerRoutes(router) {
                 'Channel.Create': ['createTeamChannel'],
                 'ChannelMember.ReadWrite.All': ['addChannelMember'],
                 'ChannelMessage.Send': ['sendChannelMessage', 'replyToMessage'],
-                'Files.ReadWrite.All': ['listChannelFiles', 'uploadFileToChannel', 'readChannelFile'],
+                'Files.ReadWrite.All': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks', 'uploadFile', 'createSharingLink', 'setFileContent', 'updateFileContent', 'removeSharingPermission',
+                    'listChannelFiles', 'uploadFileToChannel', 'readChannelFile',
+                    // Excel workbook tools
+                    'createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet',
+                    'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange',
+                    'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow',
+                    'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange',
+                    'callWorkbookFunction', 'calculateWorkbook',
+                    // Word document tools
+                    'createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml',
+                    // PowerPoint tools
+                    'createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata'],
                 // Tasks tools
                 'Tasks.Read': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask'],
                 'Tasks.ReadWrite': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'createTask', 'updateTask', 'deleteTask', 'completeTask'],
