@@ -360,15 +360,18 @@ function registerRoutes(router) {
                 // Files tools
                 'Files.Read': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks'],
                 'Files.ReadWrite': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks', 'uploadFile', 'createSharingLink', 'setFileContent', 'updateFileContent', 'removeSharingPermission',
-                    // Excel workbook tools
+                    // Consolidated Office document tools (MCP-facing)
+                    'excelSession', 'excelWorksheet', 'excelRange', 'excelTable', 'excelFunction',
+                    'wordDocument', 'powerpointPresentation',
+                    // Legacy Excel workbook tools
                     'createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet',
                     'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange',
                     'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow',
                     'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange',
                     'callWorkbookFunction', 'calculateWorkbook',
-                    // Word document tools
+                    // Legacy Word document tools
                     'createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml',
-                    // PowerPoint tools
+                    // Legacy PowerPoint tools
                     'createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata'],
                 // People tools
                 'People.Read': ['findPeople', 'getRelevantPeople', 'getPersonById', 'search'],
@@ -385,15 +388,18 @@ function registerRoutes(router) {
                 'ChannelMessage.Send': ['sendChannelMessage', 'replyToMessage'],
                 'Files.ReadWrite.All': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks', 'uploadFile', 'createSharingLink', 'setFileContent', 'updateFileContent', 'removeSharingPermission',
                     'listChannelFiles', 'uploadFileToChannel', 'readChannelFile',
-                    // Excel workbook tools
+                    // Consolidated Office document tools (MCP-facing)
+                    'excelSession', 'excelWorksheet', 'excelRange', 'excelTable', 'excelFunction',
+                    'wordDocument', 'powerpointPresentation',
+                    // Legacy Excel workbook tools
                     'createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet',
                     'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange',
                     'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow',
                     'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange',
                     'callWorkbookFunction', 'calculateWorkbook',
-                    // Word document tools
+                    // Legacy Word document tools
                     'createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml',
-                    // PowerPoint tools
+                    // Legacy PowerPoint tools
                     'createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata'],
                 // Tasks tools
                 'Tasks.Read': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask'],
@@ -637,6 +643,12 @@ function registerRoutes(router) {
     excelRouter.post('/tables/convert', placeholderRateLimit, excelController.convertTableToRange);
     excelRouter.post('/functions', placeholderRateLimit, excelController.callWorkbookFunction);
     excelRouter.post('/calculate', placeholderRateLimit, excelController.calculateWorkbook);
+    // Consolidated compound tool routes
+    excelRouter.post('/session/action', placeholderRateLimit, excelController.excelSession);
+    excelRouter.post('/worksheet/action', placeholderRateLimit, excelController.excelWorksheet);
+    excelRouter.post('/range/action', placeholderRateLimit, excelController.excelRange);
+    excelRouter.post('/table/action', placeholderRateLimit, excelController.excelTable);
+    excelRouter.post('/function/action', placeholderRateLimit, excelController.excelFunction);
     v1.use('/excel', excelRouter);
 
     // --- Word Router ---
@@ -647,6 +659,8 @@ function registerRoutes(router) {
     wordRouter.get('/pdf', wordController.convertToPdf);
     wordRouter.get('/metadata', wordController.getMetadata);
     wordRouter.get('/html', wordController.getAsHtml);
+    // Consolidated compound tool route
+    wordRouter.post('/action', placeholderRateLimit, wordController.wordDocument);
     v1.use('/word', wordRouter);
 
     // --- PowerPoint Router ---
@@ -656,6 +670,8 @@ function registerRoutes(router) {
     pptRouter.get('/read', powerpointController.readPresentation);
     pptRouter.get('/pdf', powerpointController.convertToPdf);
     pptRouter.get('/metadata', powerpointController.getMetadata);
+    // Consolidated compound tool route
+    pptRouter.post('/action', placeholderRateLimit, powerpointController.powerpointPresentation);
     v1.use('/powerpoint', pptRouter);
 
     // --- Log Router --- (No Auth required for logs)

@@ -157,6 +157,20 @@ function createWordController({ wordModule }) {
         }));
         res.status(err.statusCode || 500).json({ error: 'WORD_OPERATION_FAILED', error_description: err.message });
       }
+    },
+
+    // ========== Consolidated compound tool handler ==========
+
+    /** POST /api/word/action */
+    async wordDocument(req, res) {
+      const { userId = null } = req.user || {};
+      try {
+        const result = await wordModule.handleIntent('wordDocument', req.body, { req });
+        res.json(result);
+      } catch (err) {
+        MonitoringService.logError(err);
+        res.status(err.statusCode || 500).json({ error: 'WORD_OPERATION_FAILED', error_description: err.message });
+      }
     }
   };
 }

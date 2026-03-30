@@ -132,6 +132,20 @@ function createPowerPointController({ powerpointModule }) {
         }));
         res.status(err.statusCode || 500).json({ error: 'POWERPOINT_OPERATION_FAILED', error_description: err.message });
       }
+    },
+
+    // ========== Consolidated compound tool handler ==========
+
+    /** POST /api/powerpoint/action */
+    async powerpointPresentation(req, res) {
+      const { userId = null } = req.user || {};
+      try {
+        const result = await powerpointModule.handleIntent('powerpointPresentation', req.body, { req });
+        res.json(result);
+      } catch (err) {
+        MonitoringService.logError(err);
+        res.status(err.statusCode || 500).json({ error: 'POWERPOINT_OPERATION_FAILED', error_description: err.message });
+      }
     }
   };
 }

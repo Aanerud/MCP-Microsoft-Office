@@ -218,7 +218,18 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
         // Query module
         query: { moduleName: 'query', methodName: 'processQuery' },
 
-        // Excel module tools
+        // Excel consolidated tools (MCP-facing)
+        excelSession: { moduleName: 'excel', methodName: 'excelSession' },
+        excelWorksheet: { moduleName: 'excel', methodName: 'excelWorksheet' },
+        excelRange: { moduleName: 'excel', methodName: 'excelRange' },
+        excelTable: { moduleName: 'excel', methodName: 'excelTable' },
+        excelFunction: { moduleName: 'excel', methodName: 'excelFunction' },
+        // Word consolidated tool (MCP-facing)
+        wordDocument: { moduleName: 'word', methodName: 'wordDocument' },
+        // PowerPoint consolidated tool (MCP-facing)
+        powerpointPresentation: { moduleName: 'powerpoint', methodName: 'powerpointPresentation' },
+
+        // Legacy Excel module tools (kept for REST API backward compatibility)
         createWorkbookSession: { moduleName: 'excel', methodName: 'createWorkbookSession' },
         closeWorkbookSession: { moduleName: 'excel', methodName: 'closeWorkbookSession' },
         listWorksheets: { moduleName: 'excel', methodName: 'listWorksheets' },
@@ -250,14 +261,14 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
         callWorkbookFunction: { moduleName: 'excel', methodName: 'callWorkbookFunction' },
         calculateWorkbook: { moduleName: 'excel', methodName: 'calculateWorkbook' },
 
-        // Word module tools
+        // Legacy Word module tools (kept for REST API backward compatibility)
         createWordDocument: { moduleName: 'word', methodName: 'createWordDocument' },
         readWordDocument: { moduleName: 'word', methodName: 'readWordDocument' },
         convertDocumentToPdf: { moduleName: 'word', methodName: 'convertDocumentToPdf' },
         getWordDocumentMetadata: { moduleName: 'word', methodName: 'getWordDocumentMetadata' },
         getWordDocumentAsHtml: { moduleName: 'word', methodName: 'getWordDocumentAsHtml' },
 
-        // PowerPoint module tools
+        // Legacy PowerPoint module tools (kept for REST API backward compatibility)
         createPresentation: { moduleName: 'powerpoint', methodName: 'createPresentation' },
         readPresentation: { moduleName: 'powerpoint', methodName: 'readPresentation' },
         convertPresentationToPdf: { moduleName: 'powerpoint', methodName: 'convertPresentationToPdf' },
@@ -1615,6 +1626,100 @@ This endpoint uses Microsoft Graph's calendarView which properly expands recurri
                 break;
 
             // ========== Excel Workbook Tools ==========
+            // ========== Consolidated compound tools (MCP-facing, 7 tools replace 39) ==========
+            case 'excelSession':
+                toolDef.description = 'Manage Excel workbook sessions for efficient batch operations.\n\nActions:\n- create: Create a persistent or temporary session (requires: fileId; optional: persistent, default true)\n- close: Close an active session (requires: fileId)\n\nSessions are cached per (user, fileId) with a 4-minute TTL. Only .xlsx files are supported.';
+                toolDef.endpoint = '/api/v1/excel/session/action';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    action: { type: 'string', description: 'Action to perform', required: true, enum: ['create', 'close'] },
+                    fileId: { type: 'string', description: 'OneDrive/SharePoint drive item ID of the .xlsx file', required: true },
+                    persistent: { type: 'boolean', description: 'Whether changes should be saved (true) or temporary (false). Only for create action.', optional: true, default: true }
+                };
+                break;
+            case 'excelWorksheet':
+                toolDef.description = 'Manage worksheets in an Excel workbook.\n\nActions:\n- list: List all worksheets (requires: fileId)\n- add: Add a new worksheet (requires: fileId, name)\n- get: Get a specific worksheet (requires: fileId, sheetIdOrName)\n- update: Update worksheet properties like name, position, visibility (requires: fileId, sheetIdOrName, properties)\n- delete: Delete a worksheet (requires: fileId, sheetIdOrName)';
+                toolDef.endpoint = '/api/v1/excel/worksheet/action';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    action: { type: 'string', description: 'Action to perform', required: true, enum: ['list', 'add', 'get', 'update', 'delete'] },
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    name: { type: 'string', description: 'Name for new worksheet (add action)', optional: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID (get/update/delete actions)', optional: true },
+                    properties: { type: 'object', description: 'Properties to update: { name?, position?, visibility? } (update action)', optional: true }
+                };
+                break;
+            case 'excelRange':
+                toolDef.description = 'Read, write, format, sort, and merge cell ranges in an Excel workbook.\n\nActions:\n- get: Read cell values, formulas, formatting (requires: fileId, sheetIdOrName, address)\n- update: Write values to cells (requires: fileId, sheetIdOrName, address, values as 2D array)\n- getFormat: Get formatting properties (requires: fileId, sheetIdOrName, address)\n- updateFormat: Set font/fill/borders (requires: fileId, sheetIdOrName, address, format)\n- sort: Sort range (requires: fileId, sheetIdOrName, address, fields array)\n- merge: Merge cells (requires: fileId, sheetIdOrName, address; optional: across)\n- unmerge: Unmerge cells (requires: fileId, sheetIdOrName, address)\n\nMax recommended: 10,000 cells per request. Range addresses use Excel notation: A1:C4, Sheet1!B2:D10.';
+                toolDef.endpoint = '/api/v1/excel/range/action';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    action: { type: 'string', description: 'Action to perform', required: true, enum: ['get', 'update', 'getFormat', 'updateFormat', 'sort', 'merge', 'unmerge'] },
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID', required: true },
+                    address: { type: 'string', description: 'Cell range in Excel notation (e.g., A1:C4)', required: true },
+                    values: { type: 'array', description: '2D array of values for update action, e.g., [["Name","Age"],["Alice",30]]', optional: true },
+                    format: { type: 'object', description: 'Format properties for updateFormat: { font?, fill?, borders?, horizontalAlignment?, numberFormat? }', optional: true },
+                    fields: { type: 'array', description: 'Sort fields for sort action: [{ key: columnIndex, ascending: true/false }]', optional: true },
+                    across: { type: 'boolean', description: 'Merge cells in each row separately (merge action)', optional: true }
+                };
+                break;
+            case 'excelTable':
+                toolDef.description = 'Manage tables, rows, columns, sorting, and filtering in an Excel workbook.\n\nActions:\n- list: List all tables (requires: fileId; optional: sheetIdOrName)\n- create: Create table from range (requires: fileId, sheetIdOrName, address, hasHeaders)\n- update: Update table properties (requires: fileId, tableIdOrName, properties)\n- delete: Delete a table (requires: fileId, tableIdOrName)\n- listRows: List table rows (requires: fileId, tableIdOrName)\n- addRow: Add a row (requires: fileId, tableIdOrName, values; optional: index)\n- deleteRow: Delete a row (requires: fileId, tableIdOrName, index)\n- listColumns: List table columns (requires: fileId, tableIdOrName)\n- addColumn: Add a column (requires: fileId, tableIdOrName, values; optional: index)\n- deleteColumn: Delete a column (requires: fileId, tableIdOrName, columnIdOrName)\n- sort: Sort table (requires: fileId, tableIdOrName, fields)\n- filter: Apply filter (requires: fileId, tableIdOrName, columnId, criteria)\n- clearFilter: Clear column filter (requires: fileId, tableIdOrName, columnId)\n- convertToRange: Convert table to range (requires: fileId, tableIdOrName)';
+                toolDef.endpoint = '/api/v1/excel/table/action';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    action: { type: 'string', description: 'Action to perform', required: true, enum: ['list', 'create', 'update', 'delete', 'listRows', 'addRow', 'deleteRow', 'listColumns', 'addColumn', 'deleteColumn', 'sort', 'filter', 'clearFilter', 'convertToRange'] },
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    sheetIdOrName: { type: 'string', description: 'Worksheet name or ID (list/create actions)', optional: true },
+                    tableIdOrName: { type: 'string', description: 'Table name or ID', optional: true },
+                    address: { type: 'string', description: 'Range address for create action (e.g., A1:D5)', optional: true },
+                    hasHeaders: { type: 'boolean', description: 'Whether first row contains headers (create action)', optional: true },
+                    values: { type: 'array', description: 'Values for addRow (1D array) or addColumn (2D array)', optional: true },
+                    index: { type: 'number', description: 'Position index for addRow/addColumn, or row index for deleteRow', optional: true },
+                    columnIdOrName: { type: 'string', description: 'Column name or ID (deleteColumn action)', optional: true },
+                    columnId: { type: 'string', description: 'Column ID for filter/clearFilter actions', optional: true },
+                    criteria: { type: 'object', description: 'Filter criteria: { filterOn, criterion1, operator?, criterion2? }', optional: true },
+                    fields: { type: 'array', description: 'Sort fields: [{ key: columnIndex, ascending: true/false }]', optional: true },
+                    properties: { type: 'object', description: 'Properties for update: { name?, style?, showHeaders?, showTotals? }', optional: true }
+                };
+                break;
+            case 'excelFunction':
+                toolDef.description = 'Call Excel workbook functions or recalculate formulas.\n\nActions:\n- call: Call any Excel function like SUM, VLOOKUP, PMT, MEDIAN, etc. (requires: fileId, functionName, args). Supports 300+ functions. Range arguments use { address: "Sheet1!A1:B5" } format.\n- calculate: Recalculate all formulas in the workbook (requires: fileId; optional: calculationType)';
+                toolDef.endpoint = '/api/v1/excel/function/action';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    action: { type: 'string', description: 'Action to perform', required: true, enum: ['call', 'calculate'] },
+                    fileId: { type: 'string', description: 'Drive item ID of the .xlsx file', required: true },
+                    functionName: { type: 'string', description: 'Excel function name for call action (e.g., sum, vlookup)', optional: true },
+                    args: { type: 'object', description: 'Function arguments for call action. For ranges use { address: "Sheet1!A1:B5" }', optional: true },
+                    calculationType: { type: 'string', description: 'Calculation type for calculate action', optional: true, enum: ['Recalculate', 'Full', 'FullRebuild'], default: 'Full' }
+                };
+                break;
+            case 'wordDocument':
+                toolDef.description = 'Create, read, and convert Word documents.\n\nActions:\n- create: Create a new .docx from structured content (requires: fileName, content with sections array). Section types: heading, paragraph, table, list, image.\n- read: Read document as HTML and plain text (requires: fileId). Max 25MB.\n- metadata: Get document metadata — title, author, dates (requires: fileId)\n- html: Convert document to HTML for preview (requires: fileId). Max 25MB.\n- pdf: Convert document to PDF via Microsoft Graph (requires: fileId)';
+                toolDef.endpoint = '/api/v1/word/action';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    action: { type: 'string', description: 'Action to perform', required: true, enum: ['create', 'read', 'metadata', 'html', 'pdf'] },
+                    fileId: { type: 'string', description: 'Drive item ID of the .docx file (read/metadata/html/pdf actions)', optional: true },
+                    fileName: { type: 'string', description: 'Name for new document, e.g., "Report.docx" (create action)', optional: true },
+                    content: { type: 'object', description: 'Document content for create: { sections: [{ type, ... }] }', optional: true }
+                };
+                break;
+            case 'powerpointPresentation':
+                toolDef.description = 'Create, read, and convert PowerPoint presentations.\n\nActions:\n- create: Create a new .pptx from structured slides (requires: fileName, slides array). Slide layouts: title, content, blank.\n- read: Read slide content as structured text (requires: fileId). Max 25MB.\n- metadata: Get presentation metadata — title, author, slide count (requires: fileId)\n- pdf: Convert presentation to PDF via Microsoft Graph (requires: fileId)';
+                toolDef.endpoint = '/api/v1/powerpoint/action';
+                toolDef.method = 'POST';
+                toolDef.parameters = {
+                    action: { type: 'string', description: 'Action to perform', required: true, enum: ['create', 'read', 'metadata', 'pdf'] },
+                    fileId: { type: 'string', description: 'Drive item ID of the .pptx file (read/metadata/pdf actions)', optional: true },
+                    fileName: { type: 'string', description: 'Name for new presentation, e.g., "Deck.pptx" (create action)', optional: true },
+                    slides: { type: 'array', description: 'Slides for create: [{ layout, title?, subtitle?, body?: [{type,...}] }]', optional: true }
+                };
+                break;
+
+            // ========== Legacy granular tools (kept for REST API backward compat) ==========
             case 'createWorkbookSession':
                 toolDef.description = 'Create a workbook session for an Excel file. Sessions enable efficient batch operations. Only .xlsx files are supported.';
                 toolDef.endpoint = '/api/v1/excel/session';

@@ -923,6 +923,68 @@ function createExcelController({ excelModule }) {
         }));
         res.status(err.statusCode || 500).json({ error: 'EXCEL_OPERATION_FAILED', error_description: err.message });
       }
+    },
+
+    // ========== Consolidated compound tool handlers ==========
+
+    /** POST /api/excel/session/action */
+    async excelSession(req, res) {
+      const { userId = null } = req.user || {};
+      try {
+        const result = await excelModule.handleIntent('excelSession', req.body, { req });
+        res.json(result);
+      } catch (err) {
+        MonitoringService.logError(err);
+        res.status(err.statusCode || 500).json({ error: 'EXCEL_OPERATION_FAILED', error_description: err.message });
+      }
+    },
+
+    /** POST /api/excel/worksheet/action */
+    async excelWorksheet(req, res) {
+      const { userId = null } = req.user || {};
+      try {
+        const result = await excelModule.handleIntent('excelWorksheet', req.body, { req });
+        res.json(result);
+      } catch (err) {
+        MonitoringService.logError(err);
+        res.status(err.statusCode || 500).json({ error: 'EXCEL_OPERATION_FAILED', error_description: err.message });
+      }
+    },
+
+    /** POST /api/excel/range/action */
+    async excelRange(req, res) {
+      const { userId = null } = req.user || {};
+      try {
+        const result = await excelModule.handleIntent('excelRange', req.body, { req });
+        res.json(result);
+      } catch (err) {
+        MonitoringService.logError(err);
+        res.status(err.statusCode || 500).json({ error: 'EXCEL_OPERATION_FAILED', error_description: err.message });
+      }
+    },
+
+    /** POST /api/excel/table/action */
+    async excelTable(req, res) {
+      const { userId = null } = req.user || {};
+      try {
+        const result = await excelModule.handleIntent('excelTable', req.body, { req });
+        res.json(result);
+      } catch (err) {
+        MonitoringService.logError(err);
+        res.status(err.statusCode || 500).json({ error: 'EXCEL_OPERATION_FAILED', error_description: err.message });
+      }
+    },
+
+    /** POST /api/excel/function/action */
+    async excelFunction(req, res) {
+      const { userId = null } = req.user || {};
+      try {
+        const result = await excelModule.handleIntent('excelFunction', req.body, { req });
+        res.json(result);
+      } catch (err) {
+        MonitoringService.logError(err);
+        res.status(err.statusCode || 500).json({ error: 'EXCEL_OPERATION_FAILED', error_description: err.message });
+      }
     }
   };
 }
