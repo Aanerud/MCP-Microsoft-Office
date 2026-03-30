@@ -140,22 +140,45 @@ Edit your Claude Desktop config:
 **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
+Claude Desktop has a practical limit of ~55 tools per MCP server. This project exposes 117 tools, so we split them across three servers that share the same adapter and backend:
+
 ```json
 {
   "mcpServers": {
-    "microsoft365": {
+    "microsoft-365": {
       "command": "node",
       "args": ["/path/to/MCP-Microsoft-Office/mcp-adapter.cjs"],
       "env": {
         "MCP_SERVER_URL": "http://localhost:3000",
-        "MCP_BEARER_TOKEN": "paste-your-token-here"
+        "MCP_BEARER_TOKEN": "paste-your-token-here",
+        "MCP_MODULES": "search,mail,calendar,files,people,contacts,groups,query"
+      }
+    },
+    "microsoft-365-teams": {
+      "command": "node",
+      "args": ["/path/to/MCP-Microsoft-Office/mcp-adapter.cjs"],
+      "env": {
+        "MCP_SERVER_URL": "http://localhost:3000",
+        "MCP_BEARER_TOKEN": "paste-your-token-here",
+        "MCP_MODULES": "teams,todo"
+      }
+    },
+    "microsoft-365-office": {
+      "command": "node",
+      "args": ["/path/to/MCP-Microsoft-Office/mcp-adapter.cjs"],
+      "env": {
+        "MCP_SERVER_URL": "http://localhost:3000",
+        "MCP_BEARER_TOKEN": "paste-your-token-here",
+        "MCP_MODULES": "excel,word,powerpoint,files"
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop. Ask: *"What's on my calendar today?"*
+`MCP_MODULES` filters which modules the adapter exposes. Omit it to expose all 117 tools (works with clients that have no tool cap).
+
+Restart Claude Desktop. Ask: *"What's on my calendar today?"* or *"Create an Excel workbook with a budget table."*
 
 ---
 

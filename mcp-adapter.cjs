@@ -112,8 +112,11 @@ let adapterState = {
 
 // Initialize tools service with a stub module registry containing the module definitions
 // Capabilities aligned with scopeToTools in routes.cjs for permission filtering
-const stubModuleRegistry = {
-    getAllModules: () => [
+// Module filter: set MCP_MODULES env var to a comma-separated list of module IDs
+// to expose only a subset of tools. Omit to expose all.
+const _allowedModules = process.env.MCP_MODULES ? new Set(process.env.MCP_MODULES.split(',').map(s => s.trim())) : null;
+
+const _allModules = [
         { id: 'search', name: 'search', capabilities: ['search'] },
         { id: 'mail', name: 'mail', capabilities: ['getInbox', 'readMail', 'readMailDetails', 'sendEmail', 'sendMail', 'replyToMail', 'replyToEmail', 'flagEmail', 'flagMail', 'getEmailDetails', 'markAsRead', 'markEmailRead', 'getMailAttachments', 'addMailAttachment', 'removeMailAttachment'] },
         { id: 'calendar', name: 'calendar', capabilities: ['getEvents', 'getCalendars', 'getRooms', 'getAvailability', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'findMeetingTimes', 'addAttachment', 'removeAttachment'] },
@@ -127,7 +130,10 @@ const stubModuleRegistry = {
         { id: 'word', name: 'Word Document Operations', capabilities: ['wordDocument'] },
         { id: 'powerpoint', name: 'PowerPoint Presentation Operations', capabilities: ['powerpointPresentation'] },
         { id: 'query', name: 'query', capabilities: ['query'] }
-    ],
+];
+
+const stubModuleRegistry = {
+    getAllModules: () => _allowedModules ? _allModules.filter(m => _allowedModules.has(m.id)) : _allModules,
     getModule: (moduleName) => {
         const modules = {
             'search': { id: 'search', capabilities: ['search'] },
@@ -144,6 +150,7 @@ const stubModuleRegistry = {
             'powerpoint': { id: 'powerpoint', capabilities: ['powerpointPresentation'] },
             'query': { id: 'query', capabilities: ['query'] }
         };
+        if (_allowedModules && !_allowedModules.has(moduleName)) return null;
         return modules[moduleName] || null;
     }
 };
