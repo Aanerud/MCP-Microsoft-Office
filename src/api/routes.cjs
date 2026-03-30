@@ -347,6 +347,19 @@ function registerRoutes(router) {
             const decoded = externalTokenValidator.decodeToken(accessToken);
             const scopes = decoded.payload.scp ? decoded.payload.scp.split(' ').sort() : [];
 
+            // Office document tools shared across Files.ReadWrite and Files.ReadWrite.All
+            const officeDocumentTools = [
+                'createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet',
+                'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange',
+                'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow',
+                'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange',
+                'callWorkbookFunction', 'calculateWorkbook',
+                'createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml',
+                'createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata',
+                'excelSession', 'excelWorksheet', 'excelRange', 'excelTable', 'excelFunction',
+                'wordDocument', 'powerpointPresentation'
+            ];
+
             // Map scopes to tool capabilities
             // Note: 'search' is the unified search tool - available with any read permission
             const scopeToTools = {
@@ -360,19 +373,7 @@ function registerRoutes(router) {
                 // Files tools
                 'Files.Read': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks'],
                 'Files.ReadWrite': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks', 'uploadFile', 'createSharingLink', 'setFileContent', 'updateFileContent', 'removeSharingPermission',
-                    // Consolidated Office document tools (MCP-facing)
-                    'excelSession', 'excelWorksheet', 'excelRange', 'excelTable', 'excelFunction',
-                    'wordDocument', 'powerpointPresentation',
-                    // Legacy Excel workbook tools
-                    'createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet',
-                    'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange',
-                    'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow',
-                    'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange',
-                    'callWorkbookFunction', 'calculateWorkbook',
-                    // Legacy Word document tools
-                    'createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml',
-                    // Legacy PowerPoint tools
-                    'createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata'],
+                    ...officeDocumentTools],
                 // People tools
                 'People.Read': ['findPeople', 'getRelevantPeople', 'getPersonById', 'search'],
                 // Teams/Chat tools
@@ -388,19 +389,7 @@ function registerRoutes(router) {
                 'ChannelMessage.Send': ['sendChannelMessage', 'replyToMessage'],
                 'Files.ReadWrite.All': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks', 'uploadFile', 'createSharingLink', 'setFileContent', 'updateFileContent', 'removeSharingPermission',
                     'listChannelFiles', 'uploadFileToChannel', 'readChannelFile',
-                    // Consolidated Office document tools (MCP-facing)
-                    'excelSession', 'excelWorksheet', 'excelRange', 'excelTable', 'excelFunction',
-                    'wordDocument', 'powerpointPresentation',
-                    // Legacy Excel workbook tools
-                    'createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet',
-                    'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange',
-                    'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow',
-                    'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange',
-                    'callWorkbookFunction', 'calculateWorkbook',
-                    // Legacy Word document tools
-                    'createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml',
-                    // Legacy PowerPoint tools
-                    'createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata'],
+                    ...officeDocumentTools],
                 // Tasks tools
                 'Tasks.Read': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask'],
                 'Tasks.ReadWrite': ['listTaskLists', 'getTaskList', 'listTasks', 'getTask', 'createTaskList', 'updateTaskList', 'deleteTaskList', 'createTask', 'updateTask', 'deleteTask', 'completeTask'],

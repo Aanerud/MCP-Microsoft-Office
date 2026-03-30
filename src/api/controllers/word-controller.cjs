@@ -19,6 +19,14 @@ const schemas = {
     fileName: Joi.string().required(),
     content: Joi.object().required(),
     folderId: Joi.string().optional()
+  }),
+
+  // Consolidated compound tool schema
+  wordDocument: Joi.object({
+    action: Joi.string().valid('create', 'read', 'metadata', 'html', 'pdf').required(),
+    fileId: Joi.string().optional(),
+    fileName: Joi.string().optional(),
+    content: Joi.object().optional()
   })
 };
 
@@ -163,9 +171,10 @@ function createWordController({ wordModule }) {
 
     /** POST /api/word/action */
     async wordDocument(req, res) {
-      const { userId = null } = req.user || {};
       try {
-        const result = await wordModule.handleIntent('wordDocument', req.body, { req });
+        const { error, value } = schemas.wordDocument.validate(req.body);
+        if (error) return res.status(400).json({ error: 'Invalid request', details: error.details });
+        const result = await wordModule.handleIntent('wordDocument', value, { req });
         res.json(result);
       } catch (err) {
         MonitoringService.logError(err);

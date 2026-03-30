@@ -19,6 +19,14 @@ const schemas = {
     fileName: Joi.string().required(),
     slides: Joi.array().optional(),
     folderId: Joi.string().optional()
+  }),
+
+  // Consolidated compound tool schema
+  powerpointPresentation: Joi.object({
+    action: Joi.string().valid('create', 'read', 'metadata', 'pdf').required(),
+    fileId: Joi.string().optional(),
+    fileName: Joi.string().optional(),
+    slides: Joi.array().optional()
   })
 };
 
@@ -138,9 +146,10 @@ function createPowerPointController({ powerpointModule }) {
 
     /** POST /api/powerpoint/action */
     async powerpointPresentation(req, res) {
-      const { userId = null } = req.user || {};
       try {
-        const result = await powerpointModule.handleIntent('powerpointPresentation', req.body, { req });
+        const { error, value } = schemas.powerpointPresentation.validate(req.body);
+        if (error) return res.status(400).json({ error: 'Invalid request', details: error.details });
+        const result = await powerpointModule.handleIntent('powerpointPresentation', value, { req });
         res.json(result);
       } catch (err) {
         MonitoringService.logError(err);

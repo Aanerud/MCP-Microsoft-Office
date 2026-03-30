@@ -125,7 +125,9 @@ const ExcelModule = {
 
         // ========== Consolidated compound tools ==========
         case 'excelSession': {
+          const ALLOWED = ['create', 'close'];
           const { action } = entities;
+          if (!ALLOWED.includes(action)) throw ErrorService.createError('excel', `Invalid action: ${String(action).substring(0, 30)}`, 'error', { action: String(action).substring(0, 30) });
           switch (action) {
             case 'create':
               return { type: 'workbookSession', ...(await excelService.createWorkbookSession(fileId, entities.persistent !== false, req, userId, sessionId)) };
@@ -137,7 +139,9 @@ const ExcelModule = {
           }
         }
         case 'excelWorksheet': {
+          const ALLOWED = ['list', 'add', 'get', 'update', 'delete'];
           const { action } = entities;
+          if (!ALLOWED.includes(action)) throw ErrorService.createError('excel', `Invalid action: ${String(action).substring(0, 30)}`, 'error', { action: String(action).substring(0, 30) });
           switch (action) {
             case 'list':
               return { type: 'worksheetList', worksheets: await excelService.listWorksheets(fileId, req, userId, sessionId) };
@@ -155,7 +159,9 @@ const ExcelModule = {
           }
         }
         case 'excelRange': {
+          const ALLOWED = ['get', 'update', 'getFormat', 'updateFormat', 'sort', 'merge', 'unmerge'];
           const { action } = entities;
+          if (!ALLOWED.includes(action)) throw ErrorService.createError('excel', `Invalid action: ${String(action).substring(0, 30)}`, 'error', { action: String(action).substring(0, 30) });
           switch (action) {
             case 'get':
               return { type: 'range', range: await excelService.getRange(fileId, entities.sheetIdOrName, entities.address, req, userId, sessionId) };
@@ -179,7 +185,9 @@ const ExcelModule = {
           }
         }
         case 'excelTable': {
+          const ALLOWED = ['list', 'create', 'update', 'delete', 'listRows', 'addRow', 'deleteRow', 'listColumns', 'addColumn', 'deleteColumn', 'sort', 'filter', 'clearFilter', 'convertToRange'];
           const { action } = entities;
+          if (!ALLOWED.includes(action)) throw ErrorService.createError('excel', `Invalid action: ${String(action).substring(0, 30)}`, 'error', { action: String(action).substring(0, 30) });
           switch (action) {
             case 'list':
               return { type: 'tableList', tables: await excelService.listTables(fileId, entities.sheetIdOrName, req, userId, sessionId) };
@@ -220,7 +228,9 @@ const ExcelModule = {
           }
         }
         case 'excelFunction': {
+          const ALLOWED = ['call', 'calculate'];
           const { action } = entities;
+          if (!ALLOWED.includes(action)) throw ErrorService.createError('excel', `Invalid action: ${String(action).substring(0, 30)}`, 'error', { action: String(action).substring(0, 30) });
           switch (action) {
             case 'call':
               return { type: 'functionResult', result: await excelService.callWorkbookFunction(fileId, entities.functionName, entities.args, req, userId, sessionId) };

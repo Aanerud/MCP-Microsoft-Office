@@ -47,7 +47,9 @@ const WordModule = {
 
         // ========== Consolidated compound tool ==========
         case 'wordDocument': {
+          const ALLOWED = ['create', 'read', 'metadata', 'html', 'pdf'];
           const { action } = entities;
+          if (!ALLOWED.includes(action)) throw ErrorService.createError('word', `Invalid action: ${String(action).substring(0, 30)}`, 'error', { action: String(action).substring(0, 30) });
           switch (action) {
             case 'create':
               return { type: 'fileCreated', file: await wordService.createWordDocument(entities.fileName, entities.content, entities.folderId, req, userId, sessionId) };

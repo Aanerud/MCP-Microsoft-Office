@@ -142,6 +142,52 @@ const schemas = {
   calculateWorkbook: Joi.object({
     fileId: Joi.string().required(),
     calculationType: Joi.string().valid('recalculate', 'full', 'fullRebuild').optional()
+  }),
+
+  // Consolidated compound tool schemas
+  excelSession: Joi.object({
+    action: Joi.string().valid('create', 'close').required(),
+    fileId: Joi.string().required(),
+    persistent: Joi.boolean().optional()
+  }),
+  excelWorksheet: Joi.object({
+    action: Joi.string().valid('list', 'add', 'get', 'update', 'delete').required(),
+    fileId: Joi.string().required(),
+    name: Joi.string().optional(),
+    sheetIdOrName: Joi.string().optional(),
+    properties: Joi.object().optional()
+  }),
+  excelRange: Joi.object({
+    action: Joi.string().valid('get', 'update', 'getFormat', 'updateFormat', 'sort', 'merge', 'unmerge').required(),
+    fileId: Joi.string().required(),
+    sheetIdOrName: Joi.string().required(),
+    address: Joi.string().required(),
+    values: Joi.array().optional(),
+    format: Joi.object().optional(),
+    fields: Joi.array().optional(),
+    across: Joi.boolean().optional()
+  }),
+  excelTable: Joi.object({
+    action: Joi.string().valid('list', 'create', 'update', 'delete', 'listRows', 'addRow', 'deleteRow', 'listColumns', 'addColumn', 'deleteColumn', 'sort', 'filter', 'clearFilter', 'convertToRange').required(),
+    fileId: Joi.string().required(),
+    sheetIdOrName: Joi.string().optional(),
+    tableIdOrName: Joi.string().optional(),
+    address: Joi.string().optional(),
+    hasHeaders: Joi.boolean().optional(),
+    values: Joi.array().optional(),
+    index: Joi.number().integer().optional(),
+    columnIdOrName: Joi.string().optional(),
+    columnId: Joi.string().optional(),
+    criteria: Joi.object().optional(),
+    fields: Joi.array().optional(),
+    properties: Joi.object().optional()
+  }),
+  excelFunction: Joi.object({
+    action: Joi.string().valid('call', 'calculate').required(),
+    fileId: Joi.string().required(),
+    functionName: Joi.string().optional(),
+    args: Joi.object().optional(),
+    calculationType: Joi.string().optional()
   })
 };
 
@@ -929,9 +975,10 @@ function createExcelController({ excelModule }) {
 
     /** POST /api/excel/session/action */
     async excelSession(req, res) {
-      const { userId = null } = req.user || {};
       try {
-        const result = await excelModule.handleIntent('excelSession', req.body, { req });
+        const { error, value } = schemas.excelSession.validate(req.body);
+        if (error) return res.status(400).json({ error: 'Invalid request', details: error.details });
+        const result = await excelModule.handleIntent('excelSession', value, { req });
         res.json(result);
       } catch (err) {
         MonitoringService.logError(err);
@@ -941,9 +988,10 @@ function createExcelController({ excelModule }) {
 
     /** POST /api/excel/worksheet/action */
     async excelWorksheet(req, res) {
-      const { userId = null } = req.user || {};
       try {
-        const result = await excelModule.handleIntent('excelWorksheet', req.body, { req });
+        const { error, value } = schemas.excelWorksheet.validate(req.body);
+        if (error) return res.status(400).json({ error: 'Invalid request', details: error.details });
+        const result = await excelModule.handleIntent('excelWorksheet', value, { req });
         res.json(result);
       } catch (err) {
         MonitoringService.logError(err);
@@ -953,9 +1001,10 @@ function createExcelController({ excelModule }) {
 
     /** POST /api/excel/range/action */
     async excelRange(req, res) {
-      const { userId = null } = req.user || {};
       try {
-        const result = await excelModule.handleIntent('excelRange', req.body, { req });
+        const { error, value } = schemas.excelRange.validate(req.body);
+        if (error) return res.status(400).json({ error: 'Invalid request', details: error.details });
+        const result = await excelModule.handleIntent('excelRange', value, { req });
         res.json(result);
       } catch (err) {
         MonitoringService.logError(err);
@@ -965,9 +1014,10 @@ function createExcelController({ excelModule }) {
 
     /** POST /api/excel/table/action */
     async excelTable(req, res) {
-      const { userId = null } = req.user || {};
       try {
-        const result = await excelModule.handleIntent('excelTable', req.body, { req });
+        const { error, value } = schemas.excelTable.validate(req.body);
+        if (error) return res.status(400).json({ error: 'Invalid request', details: error.details });
+        const result = await excelModule.handleIntent('excelTable', value, { req });
         res.json(result);
       } catch (err) {
         MonitoringService.logError(err);
@@ -977,9 +1027,10 @@ function createExcelController({ excelModule }) {
 
     /** POST /api/excel/function/action */
     async excelFunction(req, res) {
-      const { userId = null } = req.user || {};
       try {
-        const result = await excelModule.handleIntent('excelFunction', req.body, { req });
+        const { error, value } = schemas.excelFunction.validate(req.body);
+        if (error) return res.status(400).json({ error: 'Invalid request', details: error.details });
+        const result = await excelModule.handleIntent('excelFunction', value, { req });
         res.json(result);
       } catch (err) {
         MonitoringService.logError(err);

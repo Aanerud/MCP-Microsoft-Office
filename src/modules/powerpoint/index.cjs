@@ -45,7 +45,9 @@ const PowerPointModule = {
 
         // ========== Consolidated compound tool ==========
         case 'powerpointPresentation': {
+          const ALLOWED = ['create', 'read', 'metadata', 'pdf'];
           const { action } = entities;
+          if (!ALLOWED.includes(action)) throw ErrorService.createError('powerpoint', `Invalid action: ${String(action).substring(0, 30)}`, 'error', { action: String(action).substring(0, 30) });
           switch (action) {
             case 'create':
               return { type: 'fileCreated', file: await powerpointService.createPresentation(entities.fileName, entities.slides, entities.folderId, req, userId, sessionId) };
