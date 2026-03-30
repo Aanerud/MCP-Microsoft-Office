@@ -359,7 +359,17 @@ function registerRoutes(router) {
                 'Calendars.ReadWrite': ['getEvents', 'getAvailability', 'getCalendars', 'getRooms', 'search', 'createEvent', 'updateEvent', 'cancelEvent', 'acceptEvent', 'tentativelyAcceptEvent', 'declineEvent', 'findMeetingTimes', 'addAttachment', 'removeAttachment'],
                 // Files tools
                 'Files.Read': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks'],
-                'Files.ReadWrite': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks', 'uploadFile', 'createSharingLink', 'setFileContent', 'updateFileContent', 'removeSharingPermission'],
+                'Files.ReadWrite': ['listFiles', 'search', 'downloadFile', 'getFileMetadata', 'getFileContent', 'getSharingLinks', 'uploadFile', 'createSharingLink', 'setFileContent', 'updateFileContent', 'removeSharingPermission',
+                    // Excel workbook tools
+                    'createWorkbookSession', 'closeWorkbookSession', 'listWorksheets', 'addWorksheet', 'getWorksheet', 'updateWorksheet', 'deleteWorksheet',
+                    'getRange', 'updateRange', 'getRangeFormat', 'updateRangeFormat', 'sortRange', 'mergeRange', 'unmergeRange',
+                    'listTables', 'createTable', 'updateTable', 'deleteTable', 'listTableRows', 'addTableRow', 'deleteTableRow',
+                    'listTableColumns', 'addTableColumn', 'deleteTableColumn', 'sortTable', 'filterTable', 'clearTableFilter', 'convertTableToRange',
+                    'callWorkbookFunction', 'calculateWorkbook',
+                    // Word document tools
+                    'createWordDocument', 'readWordDocument', 'convertDocumentToPdf', 'getWordDocumentMetadata', 'getWordDocumentAsHtml',
+                    // PowerPoint tools
+                    'createPresentation', 'readPresentation', 'convertPresentationToPdf', 'getPresentationMetadata'],
                 // People tools
                 'People.Read': ['findPeople', 'getRelevantPeople', 'getPersonById', 'search'],
                 // Teams/Chat tools
