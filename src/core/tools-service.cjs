@@ -216,7 +216,52 @@ function createToolsService({ moduleRegistry, logger = console, schemaValidator 
         getMeetingTranscriptContent: { moduleName: 'teams', methodName: 'getMeetingTranscriptContent' },
 
         // Query module
-        query: { moduleName: 'query', methodName: 'processQuery' }
+        query: { moduleName: 'query', methodName: 'processQuery' },
+
+        // Excel module tools
+        createWorkbookSession: { moduleName: 'excel', methodName: 'createWorkbookSession' },
+        closeWorkbookSession: { moduleName: 'excel', methodName: 'closeWorkbookSession' },
+        listWorksheets: { moduleName: 'excel', methodName: 'listWorksheets' },
+        addWorksheet: { moduleName: 'excel', methodName: 'addWorksheet' },
+        getWorksheet: { moduleName: 'excel', methodName: 'getWorksheet' },
+        updateWorksheet: { moduleName: 'excel', methodName: 'updateWorksheet' },
+        deleteWorksheet: { moduleName: 'excel', methodName: 'deleteWorksheet' },
+        getRange: { moduleName: 'excel', methodName: 'getRange' },
+        updateRange: { moduleName: 'excel', methodName: 'updateRange' },
+        getRangeFormat: { moduleName: 'excel', methodName: 'getRangeFormat' },
+        updateRangeFormat: { moduleName: 'excel', methodName: 'updateRangeFormat' },
+        sortRange: { moduleName: 'excel', methodName: 'sortRange' },
+        mergeRange: { moduleName: 'excel', methodName: 'mergeRange' },
+        unmergeRange: { moduleName: 'excel', methodName: 'unmergeRange' },
+        listTables: { moduleName: 'excel', methodName: 'listTables' },
+        createTable: { moduleName: 'excel', methodName: 'createTable' },
+        updateTable: { moduleName: 'excel', methodName: 'updateTable' },
+        deleteTable: { moduleName: 'excel', methodName: 'deleteTable' },
+        listTableRows: { moduleName: 'excel', methodName: 'listTableRows' },
+        addTableRow: { moduleName: 'excel', methodName: 'addTableRow' },
+        deleteTableRow: { moduleName: 'excel', methodName: 'deleteTableRow' },
+        listTableColumns: { moduleName: 'excel', methodName: 'listTableColumns' },
+        addTableColumn: { moduleName: 'excel', methodName: 'addTableColumn' },
+        deleteTableColumn: { moduleName: 'excel', methodName: 'deleteTableColumn' },
+        sortTable: { moduleName: 'excel', methodName: 'sortTable' },
+        filterTable: { moduleName: 'excel', methodName: 'filterTable' },
+        clearTableFilter: { moduleName: 'excel', methodName: 'clearTableFilter' },
+        convertTableToRange: { moduleName: 'excel', methodName: 'convertTableToRange' },
+        callWorkbookFunction: { moduleName: 'excel', methodName: 'callWorkbookFunction' },
+        calculateWorkbook: { moduleName: 'excel', methodName: 'calculateWorkbook' },
+
+        // Word module tools
+        createWordDocument: { moduleName: 'word', methodName: 'createWordDocument' },
+        readWordDocument: { moduleName: 'word', methodName: 'readWordDocument' },
+        convertDocumentToPdf: { moduleName: 'word', methodName: 'convertDocumentToPdf' },
+        getWordDocumentMetadata: { moduleName: 'word', methodName: 'getWordDocumentMetadata' },
+        getWordDocumentAsHtml: { moduleName: 'word', methodName: 'getWordDocumentAsHtml' },
+
+        // PowerPoint module tools
+        createPresentation: { moduleName: 'powerpoint', methodName: 'createPresentation' },
+        readPresentation: { moduleName: 'powerpoint', methodName: 'readPresentation' },
+        convertPresentationToPdf: { moduleName: 'powerpoint', methodName: 'convertPresentationToPdf' },
+        getPresentationMetadata: { moduleName: 'powerpoint', methodName: 'getPresentationMetadata' }
     };
 
     /**
