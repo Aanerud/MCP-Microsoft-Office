@@ -494,16 +494,20 @@ async function discoverOAuthEndpoints() {
     }
 }
 
-// Helper: Completely silent for MCP protocol compliance
-function logDebug(message, ...args) {
-    // MCP requires absolute silence - no logging at all
-    // All logging is completely disabled
+// Helper: Diagnostic logging via stderr (MCP only requires stdout silence)
+// Enable with MCP_DEBUG=1 env var
+const MCP_DEBUG = process.env.MCP_DEBUG === '1' || process.env.MCP_DEBUG === 'true';
+function logDebug(message, detail) {
+    if (MCP_DEBUG) {
+        const ts = new Date().toISOString();
+        const extra = detail ? ' ' + (typeof detail === 'string' ? detail : JSON.stringify(detail)) : '';
+        process.stderr.write(`[MCP ${ts}] ${message}${extra}\n`);
+    }
 }
 
-// Helper: Completely silent for MCP protocol compliance
+// Helper: File logging (disabled for MCP compliance, use logDebug/stderr instead)
 function logToFile(prefix, method, data) {
-    // MCP requires absolute silence - no logging at all
-    // All logging is completely disabled
+    logDebug(`${prefix}.${method}`, data);
 }
 
 // Helper: send JSON-RPC response
@@ -2282,6 +2286,7 @@ function processCalendarTimeframe(toolArgs) {
 
 // Helper: Map MCP tool calls to module methods
 async function handleToolCall(toolName, toolArgs) {
+    logDebug(`[handleToolCall] ENTRY tool=${toolName}`, { argKeys: Object.keys(toolArgs || {}) });
     try {
         // Make sure adapter is initialized
         if (!adapterState.initialized) {
@@ -2290,14 +2295,13 @@ async function handleToolCall(toolName, toolArgs) {
 
         // Update last activity timestamp
         adapterState.lastActivity = Date.now();
-        
+
         // Special handling for calendar date ranges
         if ((toolName === 'getEvents' || toolName === 'getCalendar') && toolArgs.timeframe) {
             toolArgs = processCalendarTimeframe(toolArgs);
         }
-        
+
         // Special handling for file operations
-        // Map common file operation tool names directly to their module methods
         const fileOperations = {
             'searchFiles': 'files.searchFiles',
             'getFileContent': 'files.getFileContent',
@@ -2311,29 +2315,39 @@ async function handleToolCall(toolName, toolArgs) {
             'getFileMetadata': 'files.getFileMetadata',
             'listFiles': 'files.listFiles'
         };
-        
-        // If the tool is a file operation, map it directly
+
         if (fileOperations[toolName]) {
             const [moduleName, methodName] = fileOperations[toolName].split('.');
+            logDebug(`[handleToolCall] fileOperations shortcut: ${moduleName}.${methodName}`);
             return await executeModuleMethod(moduleName, methodName, toolArgs);
         }
-        
-        // First try to use the toolsService to map and transform the parameters
-        const { mapping, params } = toolsService.transformToolParameters(toolName, toolArgs);
-        
-        if (mapping) {
-            return await executeModuleMethod(mapping.moduleName, mapping.methodName, params);
+
+        // Try toolsService mapping (uses toolAliases + capability search)
+        logDebug(`[handleToolCall] trying toolsService.transformToolParameters for '${toolName}'`);
+        let mapping, params;
+        try {
+            const result = toolsService.transformToolParameters(toolName, toolArgs);
+            mapping = result.mapping;
+            params = result.params;
+            logDebug(`[handleToolCall] transformToolParameters result`, { mapping: mapping ? `${mapping.moduleName}.${mapping.methodName}` : 'null', hasParams: !!params });
+        } catch (transformErr) {
+            logDebug(`[handleToolCall] transformToolParameters THREW: ${transformErr.message}`);
         }
-        
-        // If tools service can't map it, try the API approach
+
+        if (mapping) {
+            logDebug(`[handleToolCall] dispatching to ${mapping.moduleName}.${mapping.methodName}`);
+            const result = await executeModuleMethod(mapping.moduleName, mapping.methodName, params);
+            logDebug(`[handleToolCall] SUCCESS for ${toolName}`, { hasError: !!result?.error });
+            return result;
+        }
+
+        // Fallback: try API-based tool discovery
+        logDebug(`[handleToolCall] mapping failed, trying API discovery for '${toolName}'`);
         try {
             const toolsResponse = await callApi('GET', '/tools');
             if (toolsResponse && Array.isArray(toolsResponse.tools)) {
-                // Find the tool definition
                 const toolDef = toolsResponse.tools.find(tool => tool.name === toolName);
                 if (toolDef) {
-                    // Extract module and method from endpoint
-                    // Example: /api/v1/mail/send -> mail.sendEmail
                     const path = toolDef.endpoint.replace('/api/v1/', '');
                     const parts = path.split('/');
 
@@ -2341,7 +2355,6 @@ async function handleToolCall(toolName, toolArgs) {
                         const moduleName = parts[0];
                         let methodName = parts.length > 1 ? parts[1] : 'get' + moduleName.charAt(0).toUpperCase() + moduleName.slice(1);
 
-                        // Special case mappings
                         const methodMappings = {
                             'mail': { '': 'getInbox' },
                             'calendar': { '': 'getEvents' },
@@ -2353,18 +2366,20 @@ async function handleToolCall(toolName, toolArgs) {
                             methodName = methodMappings[moduleName][''];
                         }
 
+                        logDebug(`[handleToolCall] API discovery: ${moduleName}.${methodName} from endpoint ${toolDef.endpoint}`);
                         return await executeModuleMethod(moduleName, methodName, toolArgs);
                     }
                 }
             }
         } catch (error) {
-            // If API call fails, silently continue
+            logDebug(`[handleToolCall] API discovery FAILED: ${error.message}`);
         }
-        
-        // If we get here, we couldn't map the tool
-        return { error: `Unknown tool: ${toolName}` };
+
+        logDebug(`[handleToolCall] FAILED — unknown tool '${toolName}'`);
+        return { error: `Unknown tool: ${toolName}. Available modules: ${_allModules.map(m => m.id).join(', ')}` };
     } catch (error) {
-        return { 
+        logDebug(`[handleToolCall] EXCEPTION: ${error.message}`);
+        return {
             error: `Error handling tool call: ${error.message}`,
             errorType: 'tool_error'
         };
