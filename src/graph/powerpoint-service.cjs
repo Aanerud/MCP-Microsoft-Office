@@ -227,49 +227,39 @@ async function readPresentation(fileId, req, userId, sessionId) {
       throw new Error(`File size ${size} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
     }
 
+    // Strategy: Try Graph HTML conversion first (works for ALL formats),
+    // fall back to jszip binary parsing only if Graph fails.
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
-    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
 
-    // Ensure we have a binary Buffer
-    let buffer;
-    if (Buffer.isBuffer(downloadResult)) {
-      buffer = downloadResult;
-    } else if (typeof downloadResult === 'string') {
-      buffer = Buffer.from(downloadResult, 'binary');
-    } else {
-      buffer = null;
-    }
-
-    const isOpenXml = buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
-
-    if (!isOpenXml) {
-      // Not Open XML — fall back to Graph HTML conversion for legacy .ppt and other formats
-      MonitoringService.info('PowerPoint is not Open XML, using Graph HTML conversion fallback', {
-        fileId, headerHex: buffer ? buffer.slice(0, 4).toString('hex') : 'null'
-      }, 'powerpoint');
-
-      let text = '';
-      try {
-        const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
-        const html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
-        text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      } catch (convErr) {
-        // Graph can't convert this format — return file info with webUrl
-        const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
-        text = `Unable to extract content from this presentation format. File: ${meta.name}, Size: ${meta.size} bytes. Open in browser: ${meta.webUrl}`;
+    // Attempt 1: Graph server-side HTML conversion
+    try {
+      const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
+      const html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
+      if (html && html.length > 0) {
+        const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        // Try to count slides from the HTML (each slide typically generates a section)
+        const slideMatches = html.match(/<div[^>]*class="[^"]*slide[^"]*"/gi) || [];
+        MonitoringService.trackMetric('powerpoint_read_success', Date.now() - startTime, { fileId, method: 'graph-html', userId: resolvedUserId });
+        return {
+          slideCount: slideMatches.length || null,
+          slides: [{ index: 1, texts: [text.substring(0, 10000)] }],
+          _format: 'graph-html'
+        };
       }
-
-      return {
-        slideCount: null,
-        slides: [{ index: 1, texts: [text.substring(0, 5000)], _note: 'Converted via Graph (file is not Open XML format)' }],
-        _format: 'html-fallback'
-      };
+    } catch (graphErr) {
+      MonitoringService.debug('Graph HTML conversion failed, trying jszip fallback', { fileId, error: graphErr.message }, 'powerpoint');
     }
 
-    const zip = await JSZip.loadAsync(buffer);
+    // Attempt 2: Download binary and parse with jszip (for true .pptx Open XML files)
+    try {
+      const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+      const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
 
-    // Find and sort slide XML files
-    const slideFiles = Object.keys(zip.files)
+      if (buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK') {
+        const zip = await JSZip.loadAsync(buffer);
+
+        // Find and sort slide XML files
+        const slideFiles = Object.keys(zip.files)
       .filter(f => f.match(/^ppt\/slides\/slide\d+\.xml$/))
       .sort((a, b) => {
         const numA = parseInt(a.match(/slide(\d+)\.xml$/)[1], 10);
@@ -277,33 +267,28 @@ async function readPresentation(fileId, req, userId, sessionId) {
         return numA - numB;
       });
 
-    const slides = [];
-    for (let i = 0; i < slideFiles.length; i++) {
-      const xml = await zip.file(slideFiles[i]).async('string');
-      const parsed = await parseStringPromise(xml);
-      const texts = extractTexts(parsed);
-      slides.push({ index: i + 1, texts });
+        const slides = [];
+        for (let i = 0; i < slideFiles.length; i++) {
+          const xml = await zip.file(slideFiles[i]).async('string');
+          const parsed = await parseStringPromise(xml);
+          const texts = extractTexts(parsed);
+          slides.push({ index: i + 1, texts });
+        }
+        MonitoringService.trackMetric('powerpoint_read_success', Date.now() - startTime, { fileId, method: 'jszip', slideCount: slides.length, userId: resolvedUserId });
+        return { slideCount: slides.length, slides };
+      }
+    } catch (jszipErr) {
+      MonitoringService.debug('jszip fallback also failed', { fileId, error: jszipErr.message }, 'powerpoint');
     }
 
-    const executionTime = Date.now() - startTime;
-
-    if (resolvedUserId) {
-      MonitoringService.info('PowerPoint read successfully', {
-        fileId,
-        slideCount: slides.length,
-        executionTimeMs: executionTime,
-        timestamp: new Date().toISOString()
-      }, 'powerpoint', null, resolvedUserId);
-    }
-
-    MonitoringService.trackMetric('powerpoint_read_success', executionTime, {
-      fileId,
-      slideCount: slides.length,
-      userId: resolvedUserId,
-      timestamp: new Date().toISOString()
-    });
-
-    return { slideCount: slides.length, slides };
+    // Attempt 3: Return file metadata with webUrl
+    const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+    MonitoringService.trackMetric('powerpoint_read_fallback', Date.now() - startTime, { fileId, userId: resolvedUserId });
+    return {
+      slideCount: null,
+      slides: [{ index: 1, texts: [`Unable to extract content. Open in browser: ${meta.webUrl}`] }],
+      _format: 'fallback'
+    };
   } catch (error) {
     const executionTime = Date.now() - startTime;
     const mcpError = ErrorService.createError(

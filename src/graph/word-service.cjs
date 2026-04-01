@@ -210,86 +210,44 @@ async function readWordDocument(fileId, req, userId, sessionId) {
       throw new Error(`File size ${size} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
     }
 
+    // Strategy: Try Graph HTML conversion first (works for ALL formats — .doc, .docx,
+    // SharePoint-converted files). Falls back to mammoth binary parsing only if Graph fails.
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
-    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
 
-    // Ensure we have a Buffer for mammoth/jszip
-    let buffer;
-    if (Buffer.isBuffer(downloadResult)) {
-      buffer = downloadResult;
-    } else if (typeof downloadResult === 'string') {
-      buffer = Buffer.from(downloadResult, 'binary');
-    } else if (downloadResult && typeof downloadResult === 'object') {
-      // Graph might return a JSON error or redirect response instead of binary
-      throw new Error(`Download returned object instead of binary: ${JSON.stringify(downloadResult).substring(0, 200)}`);
-    } else {
-      throw new Error(`Unexpected download result type: ${typeof downloadResult}`);
-    }
-
-    // Check if the file is a valid Open XML zip (PK header)
-    const isOpenXml = buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
-
-    if (!isOpenXml) {
-      // Not a .docx (Open XML) — likely a legacy .doc, encrypted file, or other format
-      // Fall back to Graph's server-side HTML conversion which handles all Office formats
-      MonitoringService.info('Word doc is not Open XML (header: ' + buffer.slice(0, 4).toString('hex') + '), using Graph HTML conversion fallback', {
-        fileId, headerHex: buffer.slice(0, 4).toString('hex')
-      }, 'word');
-
-      let html = '', text = '', warnings = ['File is not in Open XML (.docx) format'];
-      try {
-        const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
-        html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
-        text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-        warnings.push('Read via Graph HTML conversion');
-      } catch (convErr) {
-        // Graph can't convert this format (406 notSupported) — return what we know from metadata
-        const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
-        html = `<p>Unable to extract content from this file format. File: ${meta.name}, Size: ${meta.size} bytes. <a href="${meta.webUrl}">Open in browser</a></p>`;
-        text = `Unable to extract content from this file format. File: ${meta.name}, Size: ${meta.size} bytes. Open in browser: ${meta.webUrl}`;
-        warnings.push('Graph conversion not supported for this file format — use the webUrl to open in browser');
+    // Attempt 1: Graph server-side HTML conversion
+    try {
+      const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
+      const html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
+      if (html && html.length > 0) {
+        const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        MonitoringService.trackMetric('word_read_success', Date.now() - startTime, { fileId, method: 'graph-html', userId: resolvedUserId });
+        return { html, text, warnings: [] };
       }
+    } catch (graphErr) {
+      MonitoringService.debug('Graph HTML conversion failed, trying mammoth fallback', { fileId, error: graphErr.message }, 'word');
+    }
 
-      const executionTime = Date.now() - startTime;
-      if (resolvedUserId) {
-        MonitoringService.info('Word document read via fallback', {
-          fileId, htmlLength: html.length, executionTimeMs: executionTime
-        }, 'word', null, resolvedUserId);
+    // Attempt 2: Download binary and parse with mammoth (for true .docx files when Graph conversion is unavailable)
+    try {
+      const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+      const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
+
+      if (buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK') {
+        const result = await mammoth.convertToHtml({ buffer });
+        const textResult = await mammoth.extractRawText({ buffer });
+        MonitoringService.trackMetric('word_read_success', Date.now() - startTime, { fileId, method: 'mammoth', userId: resolvedUserId });
+        return { html: result.value, text: textResult.value, warnings: result.messages };
       }
-
-      return { html, text, warnings: ['File was not in .docx format — read via Graph server-side conversion'] };
+    } catch (mammothErr) {
+      MonitoringService.debug('Mammoth fallback also failed', { fileId, error: mammothErr.message }, 'word');
     }
 
-    MonitoringService.debug('Word doc download buffer info', {
-      isBuffer: true, length: buffer.length, firstBytes: buffer.slice(0, 4).toString('hex'), isZip: true
-    }, 'word');
-
-    const result = await mammoth.convertToHtml({ buffer });
-    const textResult = await mammoth.extractRawText({ buffer });
-
-    const executionTime = Date.now() - startTime;
-
-    if (resolvedUserId) {
-      MonitoringService.info('Word document read successfully', {
-        fileId,
-        htmlLength: result.value.length,
-        textLength: textResult.value.length,
-        executionTimeMs: executionTime,
-        timestamp: new Date().toISOString()
-      }, 'word', null, resolvedUserId);
-    }
-
-    MonitoringService.trackMetric('word_read_success', executionTime, {
-      fileId,
-      userId: resolvedUserId,
-      timestamp: new Date().toISOString()
-    });
-
-    return {
-      html: result.value,
-      text: textResult.value,
-      warnings: result.messages
-    };
+    // Attempt 3: Return file metadata with webUrl so user can open in browser
+    const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+    const fallbackHtml = `<p>Unable to extract content. <a href="${meta.webUrl}">Open ${meta.name} in browser</a></p>`;
+    const fallbackText = `Unable to extract content. Open in browser: ${meta.webUrl}`;
+    MonitoringService.trackMetric('word_read_fallback', Date.now() - startTime, { fileId, userId: resolvedUserId });
+    return { html: fallbackHtml, text: fallbackText, warnings: ['Content extraction not available — use the webUrl to open in browser'] };
   } catch (error) {
     const executionTime = Date.now() - startTime;
     const mcpError = ErrorService.createError(
