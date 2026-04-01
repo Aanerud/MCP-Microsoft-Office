@@ -1096,7 +1096,7 @@ This endpoint uses Microsoft Graph's calendarView which properly expands recurri
                 };
                 break;
             case 'downloadFile':
-                toolDef.description = 'Download a file from OneDrive or SharePoint';
+                toolDef.description = 'Download raw file bytes from OneDrive. Returns base64 binary. For Office documents, prefer: wordDocument (action:read) for .docx, powerpointPresentation (action:read) for .pptx, or excelRange for .xlsx — these return structured text instead of raw bytes.';
                 toolDef.endpoint = '/api/v1/files/download';
                 toolDef.method = 'GET';
                 toolDef.parameters = {
@@ -1126,7 +1126,7 @@ This endpoint uses Microsoft Graph's calendarView which properly expands recurri
                 };
                 break;
             case 'getFileContent':
-                toolDef.description = 'Get the content of a specific file. Use search with entityTypes: ["driveItem"] or listFiles to find the file ID.';
+                toolDef.description = 'Get raw file content as base64 bytes. Best for text files and CSVs. For Office documents, prefer: wordDocument (action:read) for .docx/.doc, powerpointPresentation (action:read) for .pptx, excelRange for .xlsx — these extract structured text.';
                 toolDef.endpoint = '/api/v1/files/content';
                 toolDef.method = 'GET';
                 toolDef.parameters = {
