@@ -230,22 +230,34 @@ async function readPresentation(fileId, req, userId, sessionId) {
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
     const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
 
-    // Ensure we have a valid binary Buffer
+    // Ensure we have a binary Buffer
     let buffer;
     if (Buffer.isBuffer(downloadResult)) {
       buffer = downloadResult;
     } else if (typeof downloadResult === 'string') {
       buffer = Buffer.from(downloadResult, 'binary');
-    } else if (downloadResult && typeof downloadResult === 'object') {
-      throw new Error(`Download returned object instead of binary: ${JSON.stringify(downloadResult).substring(0, 200)}`);
     } else {
-      throw new Error(`Unexpected download result type: ${typeof downloadResult}`);
+      buffer = null;
     }
 
-    // Validate zip header (pptx = zip with PK header)
-    if (buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
-      const preview = buffer.slice(0, 100).toString('utf8').replace(/[^\x20-\x7E]/g, '.');
-      throw new Error(`Downloaded content is not a valid .pptx file (expected PK zip header, got ${buffer.slice(0,4).toString('hex')}). Preview: ${preview}`);
+    const isOpenXml = buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
+
+    if (!isOpenXml) {
+      // Not Open XML — fall back to Graph HTML conversion for legacy .ppt and other formats
+      MonitoringService.info('PowerPoint is not Open XML, using Graph HTML conversion fallback', {
+        fileId, headerHex: buffer ? buffer.slice(0, 4).toString('hex') : 'null'
+      }, 'powerpoint');
+
+      const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
+      const html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
+      // Extract text from HTML
+      const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+      return {
+        slideCount: null,
+        slides: [{ index: 1, texts: [text.substring(0, 5000)], _note: 'Converted via Graph (file is not Open XML format)' }],
+        _format: 'html-fallback'
+      };
     }
 
     const zip = await JSZip.loadAsync(buffer);
@@ -432,29 +444,37 @@ async function getPresentationMetadata(fileId, req, userId, sessionId) {
     const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
     const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
     const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
-    if (!buffer || buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
-      throw new Error(`Downloaded content is not a valid .pptx (got ${buffer ? buffer.slice(0,4).toString('hex') : 'null'})`);
-    }
-    const zip = await JSZip.loadAsync(buffer);
+    const isOpenXml = buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
 
-    // Count slides
-    const slideCount = Object.keys(zip.files)
-      .filter(f => f.match(/^ppt\/slides\/slide\d+\.xml$/))
-      .length;
-
-    // Extract core properties
-    const coreXml = await zip.file('docProps/core.xml')?.async('string');
+    let slideCount = null;
     let docProps = {};
-    if (coreXml) {
-      const parsed = await parseStringPromise(coreXml);
-      const props = parsed['cp:coreProperties'] || parsed['coreProperties'] || {};
-      docProps = {
-        title: props['dc:title']?.[0] || props['title']?.[0] || null,
-        creator: props['dc:creator']?.[0] || props['creator']?.[0] || null,
+
+    if (isOpenXml) {
+      const zip = await JSZip.loadAsync(buffer);
+      slideCount = Object.keys(zip.files).filter(f => f.match(/^ppt\/slides\/slide\d+\.xml$/)).length;
+      const coreXml = await zip.file('docProps/core.xml')?.async('string');
+      if (coreXml) {
+        const parsed = await parseStringPromise(coreXml);
+        const props = parsed['cp:coreProperties'] || parsed['coreProperties'] || {};
+        docProps = {
+          title: props['dc:title']?.[0] || props['title']?.[0] || null,
+          creator: props['dc:creator']?.[0] || props['creator']?.[0] || null,
         created: props['dcterms:created']?.[0]?._ || props['dcterms:created']?.[0] || null,
         modified: props['dcterms:modified']?.[0]?._ || props['dcterms:modified']?.[0] || null,
         description: props['dc:description']?.[0] || props['description']?.[0] || null,
         keywords: props['cp:keywords']?.[0] || props['keywords']?.[0] || null
+        };
+      }
+    } else {
+      // Legacy format — use Graph metadata
+      docProps = {
+        title: graphMeta.name?.replace(/\.[^.]+$/, '') || null,
+        creator: graphMeta.createdBy?.user?.displayName || null,
+        created: graphMeta.createdDateTime || null,
+        modified: graphMeta.lastModifiedDateTime || null,
+        description: null,
+        keywords: null,
+        _note: 'Metadata from Graph (file is not Open XML format)'
       };
     }
 
@@ -464,7 +484,7 @@ async function getPresentationMetadata(fileId, req, userId, sessionId) {
       MonitoringService.info('PowerPoint metadata retrieved', {
         fileId,
         slideCount,
-        hasDocProps: !!coreXml,
+        isOpenXml,
         executionTimeMs: executionTime,
         timestamp: new Date().toISOString()
       }, 'powerpoint', null, resolvedUserId);

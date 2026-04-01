@@ -226,17 +226,42 @@ async function readWordDocument(fileId, req, userId, sessionId) {
       throw new Error(`Unexpected download result type: ${typeof downloadResult}`);
     }
 
-    // Validate the buffer is actually a zip file (docx = zip with PK header)
-    if (buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
-      const preview = buffer.slice(0, 100).toString('utf8').replace(/[^\x20-\x7E]/g, '.');
-      throw new Error(`Downloaded content is not a valid .docx file (expected PK zip header, got ${buffer.slice(0,4).toString('hex')}). First 100 chars: ${preview}`);
+    // Check if the file is a valid Open XML zip (PK header)
+    const isOpenXml = buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
+
+    if (!isOpenXml) {
+      // Not a .docx (Open XML) — likely a legacy .doc, encrypted file, or other format
+      // Fall back to Graph's server-side HTML conversion which handles all Office formats
+      MonitoringService.info('Word doc is not Open XML (header: ' + buffer.slice(0, 4).toString('hex') + '), using Graph HTML conversion fallback', {
+        fileId, headerHex: buffer.slice(0, 4).toString('hex')
+      }, 'word');
+
+      let html = '', text = '', warnings = ['File is not in Open XML (.docx) format'];
+      try {
+        const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
+        html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
+        text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        warnings.push('Read via Graph HTML conversion');
+      } catch (convErr) {
+        // Graph can't convert this format (406 notSupported) — return what we know from metadata
+        const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+        html = `<p>Unable to extract content from this file format. File: ${meta.name}, Size: ${meta.size} bytes. <a href="${meta.webUrl}">Open in browser</a></p>`;
+        text = `Unable to extract content from this file format. File: ${meta.name}, Size: ${meta.size} bytes. Open in browser: ${meta.webUrl}`;
+        warnings.push('Graph conversion not supported for this file format — use the webUrl to open in browser');
+      }
+
+      const executionTime = Date.now() - startTime;
+      if (resolvedUserId) {
+        MonitoringService.info('Word document read via fallback', {
+          fileId, htmlLength: html.length, executionTimeMs: executionTime
+        }, 'word', null, resolvedUserId);
+      }
+
+      return { html, text, warnings: ['File was not in .docx format — read via Graph server-side conversion'] };
     }
 
     MonitoringService.debug('Word doc download buffer info', {
-      isBuffer: true,
-      length: buffer.length,
-      firstBytes: buffer.slice(0, 4).toString('hex'),
-      isZip: true
+      isBuffer: true, length: buffer.length, firstBytes: buffer.slice(0, 4).toString('hex'), isZip: true
     }, 'word');
 
     const result = await mammoth.convertToHtml({ buffer });
@@ -409,25 +434,37 @@ async function getWordDocumentMetadata(fileId, req, userId, sessionId) {
     // Get Graph file metadata and download content
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
     const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+    // Try to extract docProps from Open XML, fall back to Graph metadata for non-zip files
+    let docProps = {};
     const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
     const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
-    if (!buffer || buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
-      throw new Error(`Downloaded content is not a valid .docx (got ${buffer ? buffer.slice(0,4).toString('hex') : 'null'})`);
-    }
-    const zip = await JSZip.loadAsync(buffer);
-    const coreXml = await zip.file('docProps/core.xml')?.async('string');
+    const isOpenXml = buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
 
-    let docProps = {};
-    if (coreXml) {
-      const parsed = await parseStringPromise(coreXml);
-      const props = parsed['cp:coreProperties'] || parsed['coreProperties'] || {};
+    if (isOpenXml) {
+      const zip = await JSZip.loadAsync(buffer);
+      const coreXml = await zip.file('docProps/core.xml')?.async('string');
+      if (coreXml) {
+        const parsed = await parseStringPromise(coreXml);
+        const props = parsed['cp:coreProperties'] || parsed['coreProperties'] || {};
+        docProps = {
+          title: props['dc:title']?.[0] || props['title']?.[0] || null,
+          creator: props['dc:creator']?.[0] || props['creator']?.[0] || null,
+          created: props['dcterms:created']?.[0]?._ || props['dcterms:created']?.[0] || null,
+          modified: props['dcterms:modified']?.[0]?._ || props['dcterms:modified']?.[0] || null,
+          description: props['dc:description']?.[0] || props['description']?.[0] || null,
+          keywords: props['cp:keywords']?.[0] || props['keywords']?.[0] || null
+        };
+      }
+    } else {
+      // Legacy format — extract what we can from Graph driveItem metadata
       docProps = {
-        title: props['dc:title']?.[0] || props['title']?.[0] || null,
-        creator: props['dc:creator']?.[0] || props['creator']?.[0] || null,
-        created: props['dcterms:created']?.[0]?._ || props['dcterms:created']?.[0] || null,
-        modified: props['dcterms:modified']?.[0]?._ || props['dcterms:modified']?.[0] || null,
-        description: props['dc:description']?.[0] || props['description']?.[0] || null,
-        keywords: props['cp:keywords']?.[0] || props['keywords']?.[0] || null
+        title: graphMeta.name?.replace(/\.[^.]+$/, '') || null,
+        creator: graphMeta.createdBy?.user?.displayName || null,
+        created: graphMeta.createdDateTime || null,
+        modified: graphMeta.lastModifiedDateTime || null,
+        description: null,
+        keywords: null,
+        _note: 'Metadata extracted from Graph (file is not Open XML format)'
       };
     }
 
@@ -436,7 +473,7 @@ async function getWordDocumentMetadata(fileId, req, userId, sessionId) {
     if (resolvedUserId) {
       MonitoringService.info('Word document metadata retrieved', {
         fileId,
-        hasDocProps: !!coreXml,
+        isOpenXml,
         executionTimeMs: executionTime,
         timestamp: new Date().toISOString()
       }, 'word', null, resolvedUserId);
@@ -521,17 +558,33 @@ async function getWordDocumentAsHtml(fileId, req, userId, sessionId) {
     }
 
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
-    const buffer = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
-    const result = await mammoth.convertToHtml({ buffer });
+    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+    const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : downloadResult);
+    const isOpenXml = Buffer.isBuffer(buffer) && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
+
+    let html, warnings = [];
+    if (isOpenXml) {
+      const result = await mammoth.convertToHtml({ buffer });
+      html = result.value;
+      warnings = result.messages;
+    } else {
+      // Fall back to Graph HTML conversion for legacy/non-zip formats
+      try {
+        const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
+        html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
+        warnings = [{ message: 'Converted via Graph (file is not Open XML format)' }];
+      } catch (convErr) {
+        const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+        html = `<p>Unable to convert this file format to HTML. File: ${meta.name}. <a href="${meta.webUrl}">Open in browser</a></p>`;
+        warnings = [{ message: 'Conversion not supported — use webUrl to open in browser' }];
+      }
+    }
 
     const executionTime = Date.now() - startTime;
 
     if (resolvedUserId) {
       MonitoringService.info('Word document converted to HTML', {
-        fileId,
-        htmlLength: result.value.length,
-        executionTimeMs: executionTime,
-        timestamp: new Date().toISOString()
+        fileId, htmlLength: html.length, fallback: !isOpenXml, executionTimeMs: executionTime
       }, 'word', null, resolvedUserId);
     }
 
@@ -541,10 +594,7 @@ async function getWordDocumentAsHtml(fileId, req, userId, sessionId) {
       timestamp: new Date().toISOString()
     });
 
-    return {
-      html: result.value,
-      warnings: result.messages
-    };
+    return { html, warnings };
   } catch (error) {
     const executionTime = Date.now() - startTime;
     const mcpError = ErrorService.createError(
