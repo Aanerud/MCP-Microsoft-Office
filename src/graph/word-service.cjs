@@ -6,7 +6,9 @@
 
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, AlignmentType, ImageRun } = require('docx');
 const mammoth = require('mammoth');
+const WordExtractor = require('word-extractor');
 const JSZip = require('jszip');
+const wordExtractor = new WordExtractor();
 const { parseStringPromise } = require('xml2js');
 const graphClientFactory = require('./graph-client.cjs');
 const filesService = require('./files-service.cjs');
@@ -210,43 +212,66 @@ async function readWordDocument(fileId, req, userId, sessionId) {
       throw new Error(`File size ${size} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
     }
 
-    // Strategy: Try Graph HTML conversion first (works for ALL formats — .doc, .docx,
-    // SharePoint-converted files). Falls back to mammoth binary parsing only if Graph fails.
+    // Strategy:
+    // 1. Download binary via /contentStream (beta) — returns raw bytes without 302 redirect
+    // 2. Try word-extractor (handles both .doc OLE2 and .docx Open XML)
+    // 3. If word-extractor fails, try mammoth (better HTML quality for .docx)
+    // 4. Last resort: return webUrl
+    // See: https://learn.microsoft.com/en-us/graph/api/driveitem-get-contentstream
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
 
-    // Attempt 1: Graph server-side HTML conversion
-    try {
-      const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
-      const html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
-      if (html && html.length > 0) {
-        const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-        MonitoringService.trackMetric('word_read_success', Date.now() - startTime, { fileId, method: 'graph-html', userId: resolvedUserId });
-        return { html, text, warnings: [] };
-      }
-    } catch (graphErr) {
-      MonitoringService.debug('Graph HTML conversion failed, trying mammoth fallback', { fileId, error: graphErr.message }, 'word');
-    }
-
-    // Attempt 2: Download binary via /contentStream (beta) and parse with mammoth
-    // The /contentStream endpoint returns 200 with raw binary directly (no 302 redirect)
-    // See: https://learn.microsoft.com/en-us/graph/api/driveitem-get-contentstream
+    let buffer = null;
     try {
       const downloadResult = await client.api(`/me/drive/items/${fileId}/contentStream`, resolvedUserId, resolvedSessionId).version('beta').get();
-      let buffer = null;
       if (Buffer.isBuffer(downloadResult)) {
         buffer = downloadResult;
       } else if (typeof downloadResult === 'string') {
         buffer = Buffer.from(downloadResult, 'binary');
       }
+    } catch (dlErr) {
+      MonitoringService.debug('contentStream download failed', { fileId, error: dlErr.message }, 'word');
+    }
 
-      if (buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK') {
-        const result = await mammoth.convertToHtml({ buffer });
-        const textResult = await mammoth.extractRawText({ buffer });
-        MonitoringService.trackMetric('word_read_success', Date.now() - startTime, { fileId, method: 'mammoth', userId: resolvedUserId });
-        return { html: result.value, text: textResult.value, warnings: result.messages };
+    if (buffer && buffer.length > 0) {
+      // Attempt 1: word-extractor (handles .doc OLE2 AND .docx Open XML)
+      try {
+        const doc = await wordExtractor.extract(buffer);
+        const text = doc.getBody();
+        if (text && text.trim().length > 0) {
+          // Also try mammoth for HTML (only works on .docx/PK files)
+          let html = '';
+          if (buffer.slice(0, 2).toString() === 'PK') {
+            try {
+              const mammothResult = await mammoth.convertToHtml({ buffer });
+              html = mammothResult.value;
+            } catch (mErr) {
+              // mammoth failed — use text with basic HTML wrapping
+              html = text.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '').join('\n');
+            }
+          } else {
+            // OLE2 file — wrap text as HTML paragraphs
+            html = text.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '').join('\n');
+          }
+          MonitoringService.trackMetric('word_read_success', Date.now() - startTime, {
+            fileId, method: 'word-extractor', format: buffer.slice(0, 2).toString() === 'PK' ? 'docx' : 'doc', userId: resolvedUserId
+          });
+          return { html, text, warnings: [] };
+        }
+      } catch (weErr) {
+        MonitoringService.debug('word-extractor failed, trying mammoth', { fileId, error: weErr.message }, 'word');
       }
-    } catch (mammothErr) {
-      MonitoringService.debug('Mammoth fallback also failed', { fileId, error: mammothErr.message }, 'word');
+
+      // Attempt 2: mammoth only (if word-extractor failed but file is .docx)
+      if (buffer.slice(0, 2).toString() === 'PK') {
+        try {
+          const result = await mammoth.convertToHtml({ buffer });
+          const textResult = await mammoth.extractRawText({ buffer });
+          MonitoringService.trackMetric('word_read_success', Date.now() - startTime, { fileId, method: 'mammoth', userId: resolvedUserId });
+          return { html: result.value, text: textResult.value, warnings: result.messages };
+        } catch (mErr) {
+          MonitoringService.debug('mammoth also failed', { fileId, error: mErr.message }, 'word');
+        }
+      }
     }
 
     // Attempt 3: Return file metadata with webUrl so user can open in browser
@@ -396,12 +421,17 @@ async function getWordDocumentMetadata(fileId, req, userId, sessionId) {
       throw new Error(`File size ${size} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
     }
 
-    // Get Graph file metadata and download content
+    // Get Graph file metadata and download content via /contentStream (beta)
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
     const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
     // Try to extract docProps from Open XML, fall back to Graph metadata for non-zip files
     let docProps = {};
-    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+    let downloadResult = null;
+    try {
+      downloadResult = await client.api(`/me/drive/items/${fileId}/contentStream`, resolvedUserId, resolvedSessionId).version('beta').get();
+    } catch (dlErr) {
+      MonitoringService.debug('contentStream failed for metadata', { fileId, error: dlErr.message }, 'word');
+    }
     const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
     const isOpenXml = buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
 
@@ -522,27 +552,60 @@ async function getWordDocumentAsHtml(fileId, req, userId, sessionId) {
       throw new Error(`File size ${size} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
     }
 
+    // Strategy: same as readWordDocument
+    // 1. Download binary via /contentStream (beta) — returns raw bytes without 302 redirect
+    // 2. Try mammoth for best HTML quality (.docx only)
+    // 3. Try word-extractor + basic HTML wrapping (handles .doc OLE2 and .docx)
+    // 4. Last resort: return webUrl
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
-    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
-    const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : downloadResult);
-    const isOpenXml = Buffer.isBuffer(buffer) && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
+
+    let buffer = null;
+    try {
+      const downloadResult = await client.api(`/me/drive/items/${fileId}/contentStream`, resolvedUserId, resolvedSessionId).version('beta').get();
+      if (Buffer.isBuffer(downloadResult)) {
+        buffer = downloadResult;
+      } else if (typeof downloadResult === 'string') {
+        buffer = Buffer.from(downloadResult, 'binary');
+      }
+    } catch (dlErr) {
+      MonitoringService.debug('contentStream download failed for HTML conversion', { fileId, error: dlErr.message }, 'word');
+    }
 
     let html, warnings = [];
-    if (isOpenXml) {
-      const result = await mammoth.convertToHtml({ buffer });
-      html = result.value;
-      warnings = result.messages;
-    } else {
-      // Fall back to Graph HTML conversion for legacy/non-zip formats
-      try {
-        const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
-        html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
-        warnings = [{ message: 'Converted via Graph (file is not Open XML format)' }];
-      } catch (convErr) {
-        const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
-        html = `<p>Unable to convert this file format to HTML. File: ${meta.name}. <a href="${meta.webUrl}">Open in browser</a></p>`;
-        warnings = [{ message: 'Conversion not supported — use webUrl to open in browser' }];
+    if (buffer && buffer.length > 0) {
+      const isOpenXml = buffer.slice(0, 2).toString() === 'PK';
+
+      // Attempt 1: mammoth (best HTML quality, .docx only)
+      if (isOpenXml) {
+        try {
+          const result = await mammoth.convertToHtml({ buffer });
+          html = result.value;
+          warnings = result.messages;
+        } catch (mErr) {
+          MonitoringService.debug('mammoth HTML conversion failed', { fileId, error: mErr.message }, 'word');
+        }
       }
+
+      // Attempt 2: word-extractor (handles both .doc and .docx)
+      if (!html) {
+        try {
+          const doc = await wordExtractor.extract(buffer);
+          const text = doc.getBody();
+          if (text && text.trim().length > 0) {
+            html = text.split('\n').map(line => line.trim() ? `<p>${line}</p>` : '').join('\n');
+            warnings = [{ message: `Converted via word-extractor (${isOpenXml ? 'docx' : 'doc/OLE2'} format)` }];
+          }
+        } catch (weErr) {
+          MonitoringService.debug('word-extractor HTML conversion failed', { fileId, error: weErr.message }, 'word');
+        }
+      }
+    }
+
+    // Attempt 3: webUrl fallback
+    if (!html) {
+      const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+      html = `<p>Unable to convert this file to HTML. <a href="${meta.webUrl}">Open ${meta.name} in browser</a></p>`;
+      warnings = [{ message: 'Content extraction not available — use webUrl to open in browser' }];
     }
 
     const executionTime = Date.now() - startTime;

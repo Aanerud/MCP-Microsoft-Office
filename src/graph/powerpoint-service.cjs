@@ -437,10 +437,15 @@ async function getPresentationMetadata(fileId, req, userId, sessionId) {
       throw new Error(`File size ${size} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
     }
 
-    // Get Graph file metadata and download content
+    // Get Graph file metadata and download content via /contentStream (beta)
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
     const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
-    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+    let downloadResult = null;
+    try {
+      downloadResult = await client.api(`/me/drive/items/${fileId}/contentStream`, resolvedUserId, resolvedSessionId).version('beta').get();
+    } catch (dlErr) {
+      MonitoringService.debug('contentStream failed for PPT metadata', { fileId, error: dlErr.message }, 'powerpoint');
+    }
     const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
     const isOpenXml = buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
 
