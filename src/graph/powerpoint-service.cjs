@@ -250,15 +250,16 @@ async function readPresentation(fileId, req, userId, sessionId) {
       MonitoringService.debug('Graph HTML conversion failed, trying jszip fallback', { fileId, error: graphErr.message }, 'powerpoint');
     }
 
-    // Attempt 2: Download binary via @microsoft.graph.downloadUrl and parse with jszip
+    // Attempt 2: Download binary via /contentStream (beta) and parse with jszip
+    // The /contentStream endpoint returns 200 with raw binary directly (no 302 redirect)
+    // See: https://learn.microsoft.com/en-us/graph/api/driveitem-get-contentstream
     try {
-      const driveItem = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
-      const downloadUrl = driveItem['@microsoft.graph.downloadUrl'];
+      const downloadResult = await client.api(`/me/drive/items/${fileId}/contentStream`, resolvedUserId, resolvedSessionId).version('beta').get();
       let buffer = null;
-      if (downloadUrl) {
-        const fetch = require('node-fetch');
-        const dlResponse = await fetch(downloadUrl);
-        buffer = await dlResponse.buffer();
+      if (Buffer.isBuffer(downloadResult)) {
+        buffer = downloadResult;
+      } else if (typeof downloadResult === 'string') {
+        buffer = Buffer.from(downloadResult, 'binary');
       }
 
       if (buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK') {
