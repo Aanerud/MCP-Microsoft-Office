@@ -228,7 +228,26 @@ async function readPresentation(fileId, req, userId, sessionId) {
     }
 
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
-    const buffer = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+
+    // Ensure we have a valid binary Buffer
+    let buffer;
+    if (Buffer.isBuffer(downloadResult)) {
+      buffer = downloadResult;
+    } else if (typeof downloadResult === 'string') {
+      buffer = Buffer.from(downloadResult, 'binary');
+    } else if (downloadResult && typeof downloadResult === 'object') {
+      throw new Error(`Download returned object instead of binary: ${JSON.stringify(downloadResult).substring(0, 200)}`);
+    } else {
+      throw new Error(`Unexpected download result type: ${typeof downloadResult}`);
+    }
+
+    // Validate zip header (pptx = zip with PK header)
+    if (buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
+      const preview = buffer.slice(0, 100).toString('utf8').replace(/[^\x20-\x7E]/g, '.');
+      throw new Error(`Downloaded content is not a valid .pptx file (expected PK zip header, got ${buffer.slice(0,4).toString('hex')}). Preview: ${preview}`);
+    }
+
     const zip = await JSZip.loadAsync(buffer);
 
     // Find and sort slide XML files
@@ -411,7 +430,11 @@ async function getPresentationMetadata(fileId, req, userId, sessionId) {
     // Get Graph file metadata and download content
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
     const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
-    const buffer = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+    const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
+    if (!buffer || buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
+      throw new Error(`Downloaded content is not a valid .pptx (got ${buffer ? buffer.slice(0,4).toString('hex') : 'null'})`);
+    }
     const zip = await JSZip.loadAsync(buffer);
 
     // Count slides

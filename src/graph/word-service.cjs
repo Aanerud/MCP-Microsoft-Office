@@ -219,19 +219,25 @@ async function readWordDocument(fileId, req, userId, sessionId) {
       buffer = downloadResult;
     } else if (typeof downloadResult === 'string') {
       buffer = Buffer.from(downloadResult, 'binary');
+    } else if (downloadResult && typeof downloadResult === 'object') {
+      // Graph might return a JSON error or redirect response instead of binary
+      throw new Error(`Download returned object instead of binary: ${JSON.stringify(downloadResult).substring(0, 200)}`);
     } else {
-      throw new Error(`Unexpected download result type: ${typeof downloadResult}, keys: ${Object.keys(downloadResult || {})}, preview: ${JSON.stringify(downloadResult).substring(0, 100)}`);
+      throw new Error(`Unexpected download result type: ${typeof downloadResult}`);
     }
 
-    // Debug: log buffer info to help diagnose zip parse issues
-    if (process.env.NODE_ENV === 'development') {
-      MonitoringService.debug('Word doc download buffer info', {
-        isBuffer: Buffer.isBuffer(buffer),
-        length: buffer.length,
-        firstBytes: buffer.slice(0, 4).toString('hex'),
-        isZip: buffer.slice(0, 2).toString() === 'PK'
-      }, 'word');
+    // Validate the buffer is actually a zip file (docx = zip with PK header)
+    if (buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
+      const preview = buffer.slice(0, 100).toString('utf8').replace(/[^\x20-\x7E]/g, '.');
+      throw new Error(`Downloaded content is not a valid .docx file (expected PK zip header, got ${buffer.slice(0,4).toString('hex')}). First 100 chars: ${preview}`);
     }
+
+    MonitoringService.debug('Word doc download buffer info', {
+      isBuffer: true,
+      length: buffer.length,
+      firstBytes: buffer.slice(0, 4).toString('hex'),
+      isZip: true
+    }, 'word');
 
     const result = await mammoth.convertToHtml({ buffer });
     const textResult = await mammoth.extractRawText({ buffer });
@@ -403,7 +409,11 @@ async function getWordDocumentMetadata(fileId, req, userId, sessionId) {
     // Get Graph file metadata and download content
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
     const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
-    const buffer = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
+    const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
+    if (!buffer || buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
+      throw new Error(`Downloaded content is not a valid .docx (got ${buffer ? buffer.slice(0,4).toString('hex') : 'null'})`);
+    }
     const zip = await JSZip.loadAsync(buffer);
     const coreXml = await zip.file('docProps/core.xml')?.async('string');
 
