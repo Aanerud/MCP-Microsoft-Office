@@ -227,10 +227,17 @@ async function readWordDocument(fileId, req, userId, sessionId) {
       MonitoringService.debug('Graph HTML conversion failed, trying mammoth fallback', { fileId, error: graphErr.message }, 'word');
     }
 
-    // Attempt 2: Download binary and parse with mammoth (for true .docx files when Graph conversion is unavailable)
+    // Attempt 2: Download binary via @microsoft.graph.downloadUrl and parse with mammoth
+    // Using the pre-authenticated download URL avoids 302 redirect issues with node-fetch
     try {
-      const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
-      const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
+      const driveItem = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+      const downloadUrl = driveItem['@microsoft.graph.downloadUrl'];
+      let buffer = null;
+      if (downloadUrl) {
+        const fetch = require('node-fetch');
+        const dlResponse = await fetch(downloadUrl);
+        buffer = await dlResponse.buffer();
+      }
 
       if (buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK') {
         const result = await mammoth.convertToHtml({ buffer });
