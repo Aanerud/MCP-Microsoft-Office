@@ -248,10 +248,16 @@ async function readPresentation(fileId, req, userId, sessionId) {
         fileId, headerHex: buffer ? buffer.slice(0, 4).toString('hex') : 'null'
       }, 'powerpoint');
 
-      const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
-      const html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
-      // Extract text from HTML
-      const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      let text = '';
+      try {
+        const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
+        const html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
+        text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      } catch (convErr) {
+        // Graph can't convert this format — return file info with webUrl
+        const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+        text = `Unable to extract content from this presentation format. File: ${meta.name}, Size: ${meta.size} bytes. Open in browser: ${meta.webUrl}`;
+      }
 
       return {
         slideCount: null,
