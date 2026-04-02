@@ -227,31 +227,46 @@ async function readPresentation(fileId, req, userId, sessionId) {
       throw new Error(`File size ${size} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
     }
 
+    // Strategy: Try Graph HTML conversion first (works for ALL formats),
+    // fall back to jszip binary parsing only if Graph fails.
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
-    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
 
-    // Ensure we have a valid binary Buffer
-    let buffer;
-    if (Buffer.isBuffer(downloadResult)) {
-      buffer = downloadResult;
-    } else if (typeof downloadResult === 'string') {
-      buffer = Buffer.from(downloadResult, 'binary');
-    } else if (downloadResult && typeof downloadResult === 'object') {
-      throw new Error(`Download returned object instead of binary: ${JSON.stringify(downloadResult).substring(0, 200)}`);
-    } else {
-      throw new Error(`Unexpected download result type: ${typeof downloadResult}`);
+    // Attempt 1: Graph server-side HTML conversion
+    try {
+      const htmlResult = await client.api(`/me/drive/items/${fileId}/content?format=html`, resolvedUserId, resolvedSessionId).get();
+      const html = Buffer.isBuffer(htmlResult) ? htmlResult.toString('utf8') : (typeof htmlResult === 'string' ? htmlResult : '');
+      if (html && html.length > 0) {
+        const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        // Try to count slides from the HTML (each slide typically generates a section)
+        const slideMatches = html.match(/<div[^>]*class="[^"]*slide[^"]*"/gi) || [];
+        MonitoringService.trackMetric('powerpoint_read_success', Date.now() - startTime, { fileId, method: 'graph-html', userId: resolvedUserId });
+        return {
+          slideCount: slideMatches.length || null,
+          slides: [{ index: 1, texts: [text.substring(0, 10000)] }],
+          _format: 'graph-html'
+        };
+      }
+    } catch (graphErr) {
+      MonitoringService.debug('Graph HTML conversion failed, trying jszip fallback', { fileId, error: graphErr.message }, 'powerpoint');
     }
 
-    // Validate zip header (pptx = zip with PK header)
-    if (buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
-      const preview = buffer.slice(0, 100).toString('utf8').replace(/[^\x20-\x7E]/g, '.');
-      throw new Error(`Downloaded content is not a valid .pptx file (expected PK zip header, got ${buffer.slice(0,4).toString('hex')}). Preview: ${preview}`);
-    }
+    // Attempt 2: Download binary via /contentStream (beta) and parse with jszip
+    // The /contentStream endpoint returns 200 with raw binary directly (no 302 redirect)
+    // See: https://learn.microsoft.com/en-us/graph/api/driveitem-get-contentstream
+    try {
+      const downloadResult = await client.api(`/me/drive/items/${fileId}/contentStream`, resolvedUserId, resolvedSessionId).version('beta').get();
+      let buffer = null;
+      if (Buffer.isBuffer(downloadResult)) {
+        buffer = downloadResult;
+      } else if (typeof downloadResult === 'string') {
+        buffer = Buffer.from(downloadResult, 'binary');
+      }
 
-    const zip = await JSZip.loadAsync(buffer);
+      if (buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK') {
+        const zip = await JSZip.loadAsync(buffer);
 
-    // Find and sort slide XML files
-    const slideFiles = Object.keys(zip.files)
+        // Find and sort slide XML files
+        const slideFiles = Object.keys(zip.files)
       .filter(f => f.match(/^ppt\/slides\/slide\d+\.xml$/))
       .sort((a, b) => {
         const numA = parseInt(a.match(/slide(\d+)\.xml$/)[1], 10);
@@ -259,33 +274,28 @@ async function readPresentation(fileId, req, userId, sessionId) {
         return numA - numB;
       });
 
-    const slides = [];
-    for (let i = 0; i < slideFiles.length; i++) {
-      const xml = await zip.file(slideFiles[i]).async('string');
-      const parsed = await parseStringPromise(xml);
-      const texts = extractTexts(parsed);
-      slides.push({ index: i + 1, texts });
+        const slides = [];
+        for (let i = 0; i < slideFiles.length; i++) {
+          const xml = await zip.file(slideFiles[i]).async('string');
+          const parsed = await parseStringPromise(xml);
+          const texts = extractTexts(parsed);
+          slides.push({ index: i + 1, texts });
+        }
+        MonitoringService.trackMetric('powerpoint_read_success', Date.now() - startTime, { fileId, method: 'jszip', slideCount: slides.length, userId: resolvedUserId });
+        return { slideCount: slides.length, slides };
+      }
+    } catch (jszipErr) {
+      MonitoringService.debug('jszip fallback also failed', { fileId, error: jszipErr.message }, 'powerpoint');
     }
 
-    const executionTime = Date.now() - startTime;
-
-    if (resolvedUserId) {
-      MonitoringService.info('PowerPoint read successfully', {
-        fileId,
-        slideCount: slides.length,
-        executionTimeMs: executionTime,
-        timestamp: new Date().toISOString()
-      }, 'powerpoint', null, resolvedUserId);
-    }
-
-    MonitoringService.trackMetric('powerpoint_read_success', executionTime, {
-      fileId,
-      slideCount: slides.length,
-      userId: resolvedUserId,
-      timestamp: new Date().toISOString()
-    });
-
-    return { slideCount: slides.length, slides };
+    // Attempt 3: Return file metadata with webUrl
+    const meta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
+    MonitoringService.trackMetric('powerpoint_read_fallback', Date.now() - startTime, { fileId, userId: resolvedUserId });
+    return {
+      slideCount: null,
+      slides: [{ index: 1, texts: [`Unable to extract content. Open in browser: ${meta.webUrl}`] }],
+      _format: 'fallback'
+    };
   } catch (error) {
     const executionTime = Date.now() - startTime;
     const mcpError = ErrorService.createError(
@@ -427,34 +437,47 @@ async function getPresentationMetadata(fileId, req, userId, sessionId) {
       throw new Error(`File size ${size} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
     }
 
-    // Get Graph file metadata and download content
+    // Get Graph file metadata and download content via /contentStream (beta)
     const client = await graphClientFactory.createClient(req, resolvedUserId, resolvedSessionId);
     const graphMeta = await client.api(`/me/drive/items/${fileId}`, resolvedUserId, resolvedSessionId).get();
-    const downloadResult = await client.api(`/me/drive/items/${fileId}/content`, resolvedUserId, resolvedSessionId).get();
-    const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
-    if (!buffer || buffer.length < 4 || buffer.slice(0, 2).toString() !== 'PK') {
-      throw new Error(`Downloaded content is not a valid .pptx (got ${buffer ? buffer.slice(0,4).toString('hex') : 'null'})`);
+    let downloadResult = null;
+    try {
+      downloadResult = await client.api(`/me/drive/items/${fileId}/contentStream`, resolvedUserId, resolvedSessionId).version('beta').get();
+    } catch (dlErr) {
+      MonitoringService.debug('contentStream failed for PPT metadata', { fileId, error: dlErr.message }, 'powerpoint');
     }
-    const zip = await JSZip.loadAsync(buffer);
+    const buffer = Buffer.isBuffer(downloadResult) ? downloadResult : (typeof downloadResult === 'string' ? Buffer.from(downloadResult, 'binary') : null);
+    const isOpenXml = buffer && buffer.length >= 4 && buffer.slice(0, 2).toString() === 'PK';
 
-    // Count slides
-    const slideCount = Object.keys(zip.files)
-      .filter(f => f.match(/^ppt\/slides\/slide\d+\.xml$/))
-      .length;
-
-    // Extract core properties
-    const coreXml = await zip.file('docProps/core.xml')?.async('string');
+    let slideCount = null;
     let docProps = {};
-    if (coreXml) {
-      const parsed = await parseStringPromise(coreXml);
-      const props = parsed['cp:coreProperties'] || parsed['coreProperties'] || {};
-      docProps = {
-        title: props['dc:title']?.[0] || props['title']?.[0] || null,
-        creator: props['dc:creator']?.[0] || props['creator']?.[0] || null,
+
+    if (isOpenXml) {
+      const zip = await JSZip.loadAsync(buffer);
+      slideCount = Object.keys(zip.files).filter(f => f.match(/^ppt\/slides\/slide\d+\.xml$/)).length;
+      const coreXml = await zip.file('docProps/core.xml')?.async('string');
+      if (coreXml) {
+        const parsed = await parseStringPromise(coreXml);
+        const props = parsed['cp:coreProperties'] || parsed['coreProperties'] || {};
+        docProps = {
+          title: props['dc:title']?.[0] || props['title']?.[0] || null,
+          creator: props['dc:creator']?.[0] || props['creator']?.[0] || null,
         created: props['dcterms:created']?.[0]?._ || props['dcterms:created']?.[0] || null,
         modified: props['dcterms:modified']?.[0]?._ || props['dcterms:modified']?.[0] || null,
         description: props['dc:description']?.[0] || props['description']?.[0] || null,
         keywords: props['cp:keywords']?.[0] || props['keywords']?.[0] || null
+        };
+      }
+    } else {
+      // Legacy format — use Graph metadata
+      docProps = {
+        title: graphMeta.name?.replace(/\.[^.]+$/, '') || null,
+        creator: graphMeta.createdBy?.user?.displayName || null,
+        created: graphMeta.createdDateTime || null,
+        modified: graphMeta.lastModifiedDateTime || null,
+        description: null,
+        keywords: null,
+        _note: 'Metadata from Graph (file is not Open XML format)'
       };
     }
 
@@ -464,7 +487,7 @@ async function getPresentationMetadata(fileId, req, userId, sessionId) {
       MonitoringService.info('PowerPoint metadata retrieved', {
         fileId,
         slideCount,
-        hasDocProps: !!coreXml,
+        isOpenXml,
         executionTimeMs: executionTime,
         timestamp: new Date().toISOString()
       }, 'powerpoint', null, resolvedUserId);

@@ -2486,6 +2486,17 @@ async function handleRequest(msg) {
                         mcpTools = toolsResult.tools.map(formatTool);
                     }
 
+                    // Apply MCP_MODULES filter if set
+                    if (_allowedModules) {
+                        const allowedTools = new Set();
+                        for (const mod of _allModules) {
+                            if (_allowedModules.has(mod.id)) {
+                                (mod.capabilities || []).forEach(c => allowedTools.add(c));
+                            }
+                        }
+                        mcpTools = mcpTools.filter(t => allowedTools.has(t.name));
+                    }
+
                     // Filter tools based on user's permissions
                     const filteredTools = await filterToolsByPermissions(mcpTools);
 

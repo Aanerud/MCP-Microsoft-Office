@@ -44,6 +44,7 @@
         "sqlite3": "^5.1.6",
         "uuid": "^9.0.1",
         "winston": "^3.17.0",
+        "word-extractor": "^1.0.4",
         "xml2js": "^0.6.2"
     },
     "devDependencies": {

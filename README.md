@@ -178,6 +178,8 @@ Claude Desktop has a practical limit of ~55 tools per MCP server. This project e
 
 `MCP_MODULES` filters which modules the adapter exposes. Omit it to expose all 117 tools (works with clients that have no tool cap).
 
+Set `MCP_DEBUG=1` in the `env` block to enable diagnostic logging to stderr — useful for troubleshooting tool dispatch issues.
+
 Restart Claude Desktop. Ask: *"What's on my calendar today?"* or *"Create an Excel workbook with a budget table."*
 
 ---
@@ -270,7 +272,7 @@ Work directly with Excel workbooks stored in OneDrive or SharePoint — no file 
 
 ### Word (5)
 
-Create, read, and convert Word documents. Documents are created from structured JSON and stored in OneDrive. Reading uses mammoth for HTML/text extraction.
+Create, read, and convert Word documents. Documents are created from structured JSON and stored in OneDrive. Reading uses a multi-library fallback chain: mammoth (best HTML for .docx) → word-extractor (handles both .doc and .docx) → webUrl fallback. Binary downloads use the Graph beta `/contentStream` endpoint for reliable binary transfer.
 
 | Tool | Description |
 |---|---|
@@ -280,9 +282,11 @@ Create, read, and convert Word documents. Documents are created from structured 
 | `getWordDocumentAsHtml` | Convert document content to HTML |
 | `convertDocumentToPdf` | Convert a Word document to PDF |
 
+> **Note:** Some SharePoint tenants convert uploaded .docx files to OLE2 binary format within seconds of upload. When this happens, client-side parsing libraries cannot read the file. The server gracefully falls back to returning the `webUrl` so the user can open the document in the browser.
+
 ### PowerPoint (4)
 
-Create, read, and convert PowerPoint presentations. Presentations are built from structured slide data and stored in OneDrive.
+Create, read, and convert PowerPoint presentations. Presentations are built from structured slide data and stored in OneDrive. Reading uses Graph HTML conversion with jszip fallback for slide-level text extraction.
 
 | Tool | Description |
 |---|---|
@@ -482,14 +486,19 @@ See [docs/azure-deployment.md](docs/azure-deployment.md) for CI/CD deployment wi
 
 ```
 MCP-Microsoft-Office/
-├── mcp-adapter.cjs          MCP protocol adapter (runs locally)
+├── mcp-adapter.cjs          MCP protocol adapter (runs locally with Claude Desktop)
 ├── src/
 │   ├── api/                 Express routes and controllers
-│   ├── auth/                MSAL authentication
-│   ├── core/                Services (cache, storage, tools)
+│   ├── auth/                MSAL authentication (OAuth2, ROPC, token exchange)
+│   ├── core/                Services (cache, storage, tools, error handling)
 │   ├── graph/               Microsoft Graph API services
+│   │   ├── graph-client.cjs   HTTP client with retry, binary support, sessions
+│   │   ├── files-service.cjs  OneDrive file operations
+│   │   ├── excel-service.cjs  Workbook API (sessions, ranges, tables, functions)
+│   │   ├── word-service.cjs   Word create/read (docx + mammoth + word-extractor)
+│   │   └── powerpoint-service.cjs  PPT create/read (pptxgenjs + jszip)
 │   └── modules/             Feature modules (mail, calendar, excel, word, powerpoint, etc.)
-├── public/                  Web UI
+├── public/                  Web UI for authentication
 └── tests/                   E2E test suite (gitignored)
 ```
 
