@@ -272,6 +272,7 @@ async function readWordDocument(fileId, req, userId, sessionId) {
           MonitoringService.debug('mammoth also failed', { fileId, error: mErr.message }, 'word');
         }
       }
+
     }
 
     // Attempt 3: Return file metadata with webUrl so user can open in browser
@@ -572,8 +573,9 @@ async function getWordDocumentAsHtml(fileId, req, userId, sessionId) {
     }
 
     let html, warnings = [];
+    let isOpenXml = false;
     if (buffer && buffer.length > 0) {
-      const isOpenXml = buffer.slice(0, 2).toString() === 'PK';
+      isOpenXml = buffer.slice(0, 2).toString() === 'PK';
 
       // Attempt 1: mammoth (best HTML quality, .docx only)
       if (isOpenXml) {
